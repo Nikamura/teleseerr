@@ -4,12 +4,19 @@
   "description": "Telegram Bot for Overseerr",
   "main": "src/index.ts",
   "scripts": {
-    "dev": "tsx --watch --env-file=.env src/bot.ts"
+    "dev": "tsx --watch --env-file=.env src/bot.ts",
+    "codegen": "shx rm -rf src/overseerr-client-generated && openapi --input https://api-docs.overseerr.dev/overseerr-api.yml --output src/overseerr-client-generated --client node --name OverseerrClient"
   },
   "author": "",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.17",
+    "@types/node-fetch": "^2.6.11",
+    "abort-controller": "^3.0.0",
+    "form-data": "^4.0.0",
+    "node-fetch": "^2.7.0",
+    "openapi-typescript-codegen": "^0.27.0",
+    "shx": "^0.3.4",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"
   },
