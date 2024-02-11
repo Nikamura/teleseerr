@@ -1,0 +1,20 @@
+{
+  "name": "teleseerr",
+  "version": "1.0.0",
+  "description": "Telegram Bot for Overseerr",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx --watch --env-file=.env src/bot.ts"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.17",
+    "tsx": "^4.7.1",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@grammyjs/menu": "^1.2.1",
+    "grammy": "^1.20.4"
+  }
+}
