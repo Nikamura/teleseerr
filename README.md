@@ -85,8 +85,8 @@ The container needs network access to your Seerr instance.
 ### Development
 
 ```bash
-npm install
-npm run dev    # live reload with tsx watch
+pnpm install
+pnpm dev    # live reload with tsx watch
 ```
 
 ### Seerr webhook

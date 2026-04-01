@@ -30,6 +30,7 @@
   ],
   "author": "karolis",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.0",
   "type": "commonjs",
   "dependencies": {
     "@grammyjs/conversations": "^2.1.1",
