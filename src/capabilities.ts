@@ -19,9 +19,7 @@ export async function loadCapabilities(): Promise<void> {
     capabilities.has4kMovie = radarr.some((s) => s.is4k);
     capabilities.has4kTv = sonarr.some((s) => s.is4k);
 
-    capabilities.animeSonarrId = config.ANIME_SONARR_ID
-      ? Number(config.ANIME_SONARR_ID)
-      : null;
+    capabilities.animeSonarrId = config.ANIME_SONARR_ID ? Number(config.ANIME_SONARR_ID) : null;
 
     log.info(
       {

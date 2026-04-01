@@ -29,22 +29,11 @@ function escNotify(text: string): string {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
 }
 
-function findTelegramUser(seerrUserId: number): number | undefined {
-  return accountStore
-    .getAll()
-    .find((l) => l.seerrUserId === seerrUserId)?.telegramUserId;
-}
-
 function findTelegramUserByUsername(username: string): number | undefined {
-  return accountStore
-    .getAll()
-    .find((l) => l.seerrUsername === username)?.telegramUserId;
+  return accountStore.getAll().find((l) => l.seerrUsername === username)?.telegramUserId;
 }
 
-function buildMessage(
-  notificationType: string,
-  subject: string,
-): string | null {
+function buildMessage(notificationType: string, subject: string): string | null {
   const title = escNotify(subject);
 
   switch (notificationType) {
@@ -64,16 +53,10 @@ function buildMessage(
 
 // ── Webhook Handler ─────────────────────────────────
 
-export async function handleWebhook(
-  payload: SeerrWebhookPayload,
-  bot: Bot,
-): Promise<void> {
+export async function handleWebhook(payload: SeerrWebhookPayload, bot: Bot): Promise<void> {
   const { notification_type, subject, request } = payload;
 
-  log.info(
-    { notification_type, subject },
-    "Seerr webhook received",
-  );
+  log.info({ notification_type, subject }, "Seerr webhook received");
 
   const message = buildMessage(notification_type, subject);
   if (!message) {
@@ -83,15 +66,10 @@ export async function handleWebhook(
 
   // Try to find the telegram user — by username from the webhook payload
   const username = request?.requestedBy_username ?? request?.requestedBy_email;
-  const telegramUserId = username
-    ? findTelegramUserByUsername(username)
-    : undefined;
+  const telegramUserId = username ? findTelegramUserByUsername(username) : undefined;
 
   if (!telegramUserId) {
-    log.warn(
-      { notification_type, username },
-      "No linked Telegram user for webhook notification",
-    );
+    log.warn({ notification_type, username }, "No linked Telegram user for webhook notification");
     return;
   }
 

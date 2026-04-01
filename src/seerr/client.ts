@@ -16,10 +16,7 @@ import type {
 
 const BASE = `${config.SEERR_URL}/api/v1`;
 
-async function seerrFetch(
-  path: string,
-  init?: RequestInit,
-): Promise<Response> {
+async function seerrFetch(path: string, init?: RequestInit): Promise<Response> {
   const url = `${BASE}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -37,9 +34,7 @@ async function seerrFetch(
 }
 
 export async function search(query: string, page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(
-    `/search?query=${encodeURIComponent(query)}&page=${page}`,
-  );
+  const res = await seerrFetch(`/search?query=${encodeURIComponent(query)}&page=${page}`);
   if (!res.ok) throw new Error(`Search failed: ${res.status}`);
   return res.json() as Promise<SearchResponse>;
 }
@@ -59,10 +54,10 @@ export async function getTvDetails(tmdbId: number): Promise<TvDetails> {
 export async function createRequest(payload: {
   mediaType: "movie" | "tv";
   mediaId: number;
-  seasons?: number[];
-  is4k?: boolean;
-  userId?: number;
-  serverId?: number;
+  seasons?: number[] | undefined;
+  is4k?: boolean | undefined;
+  userId?: number | undefined;
+  serverId?: number | undefined;
 }): Promise<CreateRequestResult> {
   const res = await seerrFetch("/request", {
     method: "POST",
@@ -70,27 +65,27 @@ export async function createRequest(payload: {
   });
 
   if (res.status === 201) {
-    const data = await res.json();
+    const data = (await res.json()) as { id?: number; status?: number };
     return { success: true, requestId: data.id, status: data.status };
   }
 
   if (res.status === 202) {
-    const data = await res.json().catch(() => ({}));
-    const msg = (data as { message?: string }).message ?? "";
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    const msg = data.message ?? "";
     if (msg.includes("No seasons available")) return { success: false, error: "NO_SEASONS" };
     return { success: false, error: "UNKNOWN" };
   }
   if (res.status === 409) return { success: false, error: "DUPLICATE" };
   if (res.status === 403) {
-    const body = await res.json().catch(() => ({}));
-    const msg = (body as { message?: string }).message ?? "";
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    const msg = data.message ?? "";
     if (msg.includes("quota")) return { success: false, error: "QUOTA" };
     if (msg.includes("blacklist")) return { success: false, error: "BLACKLISTED" };
     return { success: false, error: "NO_PERMISSION" };
   }
 
-  const body = await res.json().catch(() => ({}));
-  log.warn({ status: res.status, body }, "Unexpected Seerr request response");
+  const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  log.warn({ status: res.status, body: errBody }, "Unexpected Seerr request response");
   return { success: false, error: "UNKNOWN" };
 }
 
@@ -121,9 +116,7 @@ export async function getUserQuota(seerrUserId: number): Promise<UserQuota> {
 }
 
 export async function getTrending(page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(
-    `/discover/trending?page=${page}`,
-  );
+  const res = await seerrFetch(`/discover/trending?page=${page}`);
   if (!res.ok) throw new Error(`Trending failed: ${res.status}`);
   return res.json() as Promise<SearchResponse>;
 }
@@ -165,9 +158,7 @@ export async function getSonarrServices(): Promise<ServiceSettings[]> {
   return res.json() as Promise<ServiceSettings[]>;
 }
 
-export async function getGenres(
-  type: "movie" | "tv",
-): Promise<{ id: number; name: string }[]> {
+export async function getGenres(type: "movie" | "tv"): Promise<{ id: number; name: string }[]> {
   const res = await seerrFetch(`/discover/genreslider/${type}`);
   if (!res.ok) return [];
   return res.json() as Promise<{ id: number; name: string }[]>;
@@ -176,18 +167,18 @@ export async function getGenres(
 export async function discover(
   type: "movie" | "tv",
   opts: {
-    genre?: number;
-    page?: number;
-    sortBy?: string;
-    primaryReleaseDateGte?: string;
-    primaryReleaseDateLte?: string;
-    firstAirDateGte?: string;
-    firstAirDateLte?: string;
-    voteAverageGte?: string;
-    voteAverageLte?: string;
-    withRuntimeGte?: string;
-    withRuntimeLte?: string;
-    keywords?: string;
+    genre?: number | undefined;
+    page?: number | undefined;
+    sortBy?: string | undefined;
+    primaryReleaseDateGte?: string | undefined;
+    primaryReleaseDateLte?: string | undefined;
+    firstAirDateGte?: string | undefined;
+    firstAirDateLte?: string | undefined;
+    voteAverageGte?: string | undefined;
+    voteAverageLte?: string | undefined;
+    withRuntimeGte?: string | undefined;
+    withRuntimeLte?: string | undefined;
+    keywords?: string | undefined;
   } = {},
 ): Promise<SearchResponse> {
   const params = new URLSearchParams();
@@ -252,7 +243,10 @@ export async function discoverUpcoming(type: "movie" | "tv", page = 1): Promise<
   return res.json() as Promise<SearchResponse>;
 }
 
-export async function getRecentlyAdded(take = 20, skip = 0): Promise<{ results: MediaItem[]; pageInfo: { pages: number; page: number; results: number } }> {
+export async function getRecentlyAdded(
+  take = 20,
+  skip = 0,
+): Promise<{ results: MediaItem[]; pageInfo: { pages: number; page: number; results: number } }> {
   const params = new URLSearchParams({
     filter: "allavailable",
     sort: "mediaAdded",
@@ -261,7 +255,17 @@ export async function getRecentlyAdded(take = 20, skip = 0): Promise<{ results: 
   });
   const res = await seerrFetch(`/media?${params}`);
   if (!res.ok) throw new Error(`Recently added failed: ${res.status}`);
-  const data = await res.json();
+  const data = (await res.json()) as {
+    results?: MediaItem[];
+    pageInfo?: {
+      pages?: number;
+      totalPages?: number;
+      page?: number;
+      currentPage?: number;
+      results?: number;
+      totalResults?: number;
+    };
+  };
   // Normalize pageInfo field names (Overseerr uses different names)
   const pi = data.pageInfo ?? {};
   return {

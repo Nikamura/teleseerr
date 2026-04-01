@@ -12,7 +12,10 @@ export async function autoLinkAdmin(): Promise<void> {
 
   const user = await seerr.getUser(config.ADMIN_SEERR_USER_ID);
   if (!user) {
-    log.warn({ seerrUserId: config.ADMIN_SEERR_USER_ID }, "Could not fetch admin Seerr user for auto-link");
+    log.warn(
+      { seerrUserId: config.ADMIN_SEERR_USER_ID },
+      "Could not fetch admin Seerr user for auto-link",
+    );
     return;
   }
 

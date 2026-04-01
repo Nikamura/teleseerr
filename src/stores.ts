@@ -7,7 +7,7 @@ import type { AccountLink, PendingUser } from "./types.js";
 // ── Account Link Store (JSON file) ────────────────
 
 const linksPath = join(config.DATA_DIR, "links.json");
-let links: Record<number, AccountLink> = {};
+let links = new Map<number, AccountLink>();
 
 function ensureDataDir() {
   if (!existsSync(config.DATA_DIR)) {
@@ -20,22 +20,22 @@ function loadLinks(): void {
   if (existsSync(linksPath)) {
     try {
       const raw = readFileSync(linksPath, "utf-8");
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(raw) as Record<string, AccountLink & { sessionCookie?: string }>;
       // Migration: strip sessionCookie from old entries
-      for (const key of Object.keys(parsed)) {
-        delete parsed[key].sessionCookie;
+      for (const [key, entry] of Object.entries(parsed)) {
+        delete entry.sessionCookie;
+        links.set(Number(key), entry);
       }
-      links = parsed;
-    } catch (e) {
+    } catch {
       log.warn("Failed to load links file, starting fresh");
-      links = {};
+      links = new Map();
     }
   }
 }
 
 function saveLinks(): void {
   ensureDataDir();
-  writeFileSync(linksPath, JSON.stringify(links, null, 2));
+  writeFileSync(linksPath, JSON.stringify(Object.fromEntries(links), null, 2));
 }
 
 // Load on startup
@@ -43,21 +43,24 @@ loadLinks();
 
 export const accountStore = {
   get(telegramUserId: number): AccountLink | undefined {
-    return links[telegramUserId];
+    return links.get(telegramUserId);
   },
 
   getAll(): AccountLink[] {
-    return Object.values(links);
+    return [...links.values()];
   },
 
   set(link: AccountLink): void {
-    links[link.telegramUserId] = link;
+    links.set(link.telegramUserId, link);
     saveLinks();
-    log.info({ telegramUser: link.telegramUserId, seerrUser: link.seerrUsername }, "account linked");
+    log.info(
+      { telegramUser: link.telegramUserId, seerrUser: link.seerrUsername },
+      "account linked",
+    );
   },
 
   delete(telegramUserId: number): void {
-    delete links[telegramUserId];
+    links.delete(telegramUserId);
     saveLinks();
     log.info({ telegramUser: telegramUserId }, "account unlinked");
   },
@@ -67,21 +70,22 @@ export const accountStore = {
 
 const pendingPath = join(config.DATA_DIR, "pending.json");
 const ignoredPath = join(config.DATA_DIR, "ignored.json");
-let pending: Record<number, PendingUser> = {};
+let pending = new Map<number, PendingUser>();
 let ignored = new Set<number>();
 
 function loadPending(): void {
   ensureDataDir();
   if (existsSync(pendingPath)) {
     try {
-      pending = JSON.parse(readFileSync(pendingPath, "utf-8"));
+      const parsed = JSON.parse(readFileSync(pendingPath, "utf-8")) as Record<string, PendingUser>;
+      pending = new Map(Object.entries(parsed).map(([k, v]) => [Number(k), v]));
     } catch {
-      pending = {};
+      pending = new Map();
     }
   }
   if (existsSync(ignoredPath)) {
     try {
-      ignored = new Set(JSON.parse(readFileSync(ignoredPath, "utf-8")));
+      ignored = new Set(JSON.parse(readFileSync(ignoredPath, "utf-8")) as number[]);
     } catch {
       ignored = new Set();
     }
@@ -90,7 +94,7 @@ function loadPending(): void {
 
 function savePending(): void {
   ensureDataDir();
-  writeFileSync(pendingPath, JSON.stringify(pending, null, 2));
+  writeFileSync(pendingPath, JSON.stringify(Object.fromEntries(pending), null, 2));
 }
 
 function saveIgnored(): void {
@@ -102,29 +106,29 @@ loadPending();
 
 export const pendingStore = {
   get(telegramUserId: number): PendingUser | undefined {
-    return pending[telegramUserId];
+    return pending.get(telegramUserId);
   },
 
   getAll(): PendingUser[] {
-    return Object.values(pending);
+    return [...pending.values()];
   },
 
   add(user: PendingUser): boolean {
-    if (pending[user.telegramUserId]) return false;
+    if (pending.has(user.telegramUserId)) return false;
     if (ignored.has(user.telegramUserId)) return false;
-    pending[user.telegramUserId] = user;
+    pending.set(user.telegramUserId, user);
     savePending();
     log.info({ telegramUser: user.telegramUserId }, "pending link request added");
     return true;
   },
 
   remove(telegramUserId: number): void {
-    delete pending[telegramUserId];
+    pending.delete(telegramUserId);
     savePending();
   },
 
   ignore(telegramUserId: number): void {
-    delete pending[telegramUserId];
+    pending.delete(telegramUserId);
     ignored.add(telegramUserId);
     savePending();
     saveIgnored();

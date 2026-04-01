@@ -39,14 +39,19 @@ bot.command("start", async (ctx) => {
       requestedAt: Date.now(),
     });
     if (isNew) {
-      const name = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || "Unknown";
+      const name =
+        [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || "Unknown";
       const userTag = ctx.from?.username ? ` (@${ctx.from.username})` : "";
       const adminKb = new InlineKeyboard().webApp("Link account", config.MINI_APP_URL);
-      bot.api.sendMessage(
-        config.ADMIN_USER_ID,
-        `New user wants access!\n\nName: ${name}${userTag}\nTelegram ID: ${userId}`,
-        { reply_markup: adminKb },
-      ).catch(e => log.error(e, "Failed to notify admin about unlinked user"));
+      bot.api
+        .sendMessage(
+          config.ADMIN_USER_ID,
+          `New user wants access!\n\nName: ${name}${userTag}\nTelegram ID: ${userId}`,
+          { reply_markup: adminKb },
+        )
+        .catch((e: unknown) => {
+          log.error(e, "Failed to notify admin about unlinked user");
+        });
     }
   }
 
@@ -82,9 +87,7 @@ async function main() {
   await autoLinkAdmin();
 
   // Set commands menu
-  await bot.api.setMyCommands([
-    { command: "start", description: "Open Teleseerr" },
-  ]);
+  await bot.api.setMyCommands([{ command: "start", description: "Open Teleseerr" }]);
 
   // Set menu button to open Mini App directly
   if (config.MINI_APP_URL) {
@@ -106,7 +109,7 @@ async function main() {
   startServer(bot);
 
   log.info({ botUsername: (await bot.api.getMe()).username }, "Bot started");
-  bot.start();
+  void bot.start();
 }
 
 // Graceful shutdown
@@ -122,7 +125,7 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-main().catch((e) => {
+main().catch((e: unknown) => {
   log.fatal(e, "Failed to start bot");
   process.exit(1);
 });

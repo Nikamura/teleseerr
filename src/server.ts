@@ -7,19 +7,21 @@ import { config } from "./config.js";
 import { log } from "./logger.js";
 import { accountStore, pendingStore, canRequest } from "./stores.js";
 import * as seerr from "./seerr/client.js";
-import type { AccountLink, PendingUser } from "./types.js";
+import type { AccountLink } from "./types.js";
 import { handleWebhook, type SeerrWebhookPayload } from "./notifications.js";
 import { capabilities } from "./capabilities.js";
 
 // ── Auth Validation ─────────────────────────────────
 
-interface AuthResult {
-  valid: boolean;
-  userId?: number;
-  firstName?: string;
-  lastName?: string;
-  username?: string;
-}
+type AuthResult =
+  | { valid: false }
+  | {
+      valid: true;
+      userId: number;
+      firstName?: string | undefined;
+      lastName?: string | undefined;
+      username?: string | undefined;
+    };
 
 function validateInitData(initData: string): AuthResult {
   if (!initData) return { valid: false };
@@ -32,18 +34,26 @@ function validateInitData(initData: string): AuthResult {
   const entries = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
   const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join("\n");
 
-  const secretKey = createHmac("sha256", "WebAppData")
-    .update(config.TELEGRAM_BOT_TOKEN)
-    .digest();
-  const computedHash = createHmac("sha256", secretKey)
-    .update(dataCheckString)
-    .digest("hex");
+  const secretKey = createHmac("sha256", "WebAppData").update(config.TELEGRAM_BOT_TOKEN).digest();
+  const computedHash = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
   if (computedHash !== hash) return { valid: false };
 
   try {
-    const user = JSON.parse(params.get("user") ?? "{}");
-    return { valid: true, userId: user.id, firstName: user.first_name, lastName: user.last_name, username: user.username };
+    const user = JSON.parse(params.get("user") ?? "{}") as {
+      id?: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
+    if (user.id == null) return { valid: false };
+    return {
+      valid: true,
+      userId: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      username: user.username,
+    };
   } catch {
     return { valid: false };
   }
@@ -53,31 +63,34 @@ function validateLoginWidget(data: string): AuthResult {
   if (!data) return { valid: false };
 
   try {
-    const parsed = JSON.parse(data);
+    const parsed = JSON.parse(data) as Record<string, unknown>;
     const { hash, ...rest } = parsed;
     if (!hash) return { valid: false };
 
     // Reject auth older than 30 days
-    const authDate = Number(rest.auth_date);
+    const authDate = Number(rest["auth_date"]);
     if (isNaN(authDate) || Date.now() / 1000 - authDate > 30 * 86400) {
       return { valid: false };
     }
 
-    const entries = Object.entries(rest)
-      .sort(([a], [b]) => a.localeCompare(b));
-    const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join("\n");
+    const entries = Object.entries(rest).sort(([a], [b]) => a.localeCompare(b));
+    const dataCheckString = entries.map(([k, v]) => `${k}=${String(v)}`).join("\n");
 
     // Login Widget: secret = SHA256(bot_token)
-    const secretKey = createHash("sha256")
-      .update(config.TELEGRAM_BOT_TOKEN)
-      .digest();
-    const computedHash = createHmac("sha256", secretKey)
-      .update(dataCheckString)
-      .digest("hex");
+    const secretKey = createHash("sha256").update(config.TELEGRAM_BOT_TOKEN).digest();
+    const computedHash = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
     if (computedHash !== hash) return { valid: false };
 
-    return { valid: true, userId: Number(parsed.id), firstName: parsed.first_name, lastName: parsed.last_name, username: parsed.username };
+    const userId = Number(parsed["id"]);
+    if (isNaN(userId)) return { valid: false };
+    return {
+      valid: true,
+      userId,
+      firstName: parsed["first_name"] as string | undefined,
+      lastName: parsed["last_name"] as string | undefined,
+      username: parsed["username"] as string | undefined,
+    };
   } catch {
     return { valid: false };
   }
@@ -125,8 +138,8 @@ function serveStatic(res: ServerResponse, urlPath: string): boolean {
   res.writeHead(200, {
     "Content-Type": contentType,
     "Cache-Control": "no-cache, no-store, must-revalidate",
-    "Pragma": "no-cache",
-    "Expires": "0",
+    Pragma: "no-cache",
+    Expires: "0",
   });
   res.end(content);
   return true;
@@ -156,6 +169,12 @@ type RouteMatch = {
   params: Record<string, string>;
 };
 
+function param(match: RouteMatch, key: string): string {
+  const val = match.params[key];
+  if (val === undefined) throw new Error(`Missing route param: ${key}`);
+  return val;
+}
+
 function matchRoute(pattern: string, path: string): RouteMatch | null {
   const patternParts = pattern.split("/");
   const pathParts = path.split("/");
@@ -163,29 +182,27 @@ function matchRoute(pattern: string, path: string): RouteMatch | null {
 
   const params: Record<string, string> = {};
   for (let i = 0; i < patternParts.length; i++) {
-    if (patternParts[i].startsWith(":")) {
-      params[patternParts[i].slice(1)] = pathParts[i];
-    } else if (patternParts[i] !== pathParts[i]) {
+    const patternPart = patternParts[i];
+    const pathPart = pathParts[i];
+    if (patternPart === undefined || pathPart === undefined) return null;
+    if (patternPart.startsWith(":")) {
+      params[patternPart.slice(1)] = pathPart;
+    } else if (patternPart !== pathPart) {
       return null;
     }
   }
   return { params };
 }
 
-async function handleApi(
-  req: IncomingMessage,
-  res: ServerResponse,
-  path: string,
-): Promise<void> {
-  const url = new URL(req.url!, `http://localhost`);
+async function handleApi(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+  const url = new URL(req.url ?? "/", `http://localhost`);
 
   // CORS preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers":
-        "Content-Type, X-Telegram-Init-Data, X-Telegram-Login-Data",
+      "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Init-Data, X-Telegram-Login-Data",
     });
     res.end();
     return;
@@ -204,12 +221,12 @@ async function handleApi(
 
   // GET /api/me — must be accessible before link check
   if (req.method === "GET" && path === "/api/me") {
-    const account = accountStore.get(auth.userId!);
+    const account = accountStore.get(auth.userId);
 
     // Add to pending and notify admin (once per user)
     if (!account && auth.userId !== config.ADMIN_USER_ID) {
       const isNew = pendingStore.add({
-        telegramUserId: auth.userId!,
+        telegramUserId: auth.userId,
         firstName: auth.firstName,
         lastName: auth.lastName,
         username: auth.username,
@@ -219,11 +236,15 @@ async function handleApi(
         const name = [auth.firstName, auth.lastName].filter(Boolean).join(" ") || "Unknown";
         const userTag = auth.username ? ` (@${auth.username})` : "";
         const kb = new InlineKeyboard().webApp("Link account", config.MINI_APP_URL);
-        botInstance.api.sendMessage(
-          config.ADMIN_USER_ID,
-          `New user wants access!\n\nName: ${name}${userTag}\nTelegram ID: ${auth.userId}`,
-          { reply_markup: kb },
-        ).catch(e => log.error(e, "Failed to notify admin about unlinked user"));
+        botInstance.api
+          .sendMessage(
+            config.ADMIN_USER_ID,
+            `New user wants access!\n\nName: ${name}${userTag}\nTelegram ID: ${auth.userId}`,
+            { reply_markup: kb },
+          )
+          .catch((e: unknown) => {
+            log.error(e, "Failed to notify admin about unlinked user");
+          });
       }
     }
 
@@ -238,7 +259,7 @@ async function handleApi(
 
   // Block unlinked non-admin users from all other endpoints
   const isAdmin = auth.userId === config.ADMIN_USER_ID;
-  if (!isAdmin && !accountStore.get(auth.userId!)) {
+  if (!isAdmin && !accountStore.get(auth.userId)) {
     return error(res, "Account not linked", 403);
   }
 
@@ -262,7 +283,7 @@ async function handleApi(
   let match = matchRoute("/api/movie/:id/recommendations", path);
   if (req.method === "GET" && match) {
     const page = Number(url.searchParams.get("page") ?? "1");
-    const data = await seerr.getMovieRecommendations(Number(match.params.id), page);
+    const data = await seerr.getMovieRecommendations(Number(param(match, "id")), page);
     return json(res, data);
   }
 
@@ -270,7 +291,7 @@ async function handleApi(
   match = matchRoute("/api/movie/:id/similar", path);
   if (req.method === "GET" && match) {
     const page = Number(url.searchParams.get("page") ?? "1");
-    const data = await seerr.getMovieSimilar(Number(match.params.id), page);
+    const data = await seerr.getMovieSimilar(Number(param(match, "id")), page);
     return json(res, data);
   }
 
@@ -278,7 +299,7 @@ async function handleApi(
   match = matchRoute("/api/tv/:id/recommendations", path);
   if (req.method === "GET" && match) {
     const page = Number(url.searchParams.get("page") ?? "1");
-    const data = await seerr.getTvRecommendations(Number(match.params.id), page);
+    const data = await seerr.getTvRecommendations(Number(param(match, "id")), page);
     return json(res, data);
   }
 
@@ -286,7 +307,7 @@ async function handleApi(
   match = matchRoute("/api/tv/:id/similar", path);
   if (req.method === "GET" && match) {
     const page = Number(url.searchParams.get("page") ?? "1");
-    const data = await seerr.getTvSimilar(Number(match.params.id), page);
+    const data = await seerr.getTvSimilar(Number(param(match, "id")), page);
     return json(res, data);
   }
 
@@ -294,8 +315,8 @@ async function handleApi(
   match = matchRoute("/api/person/:id", path);
   if (req.method === "GET" && match) {
     const [details, credits] = await Promise.all([
-      seerr.getPersonDetails(Number(match.params.id)),
-      seerr.getPersonCombinedCredits(Number(match.params.id)),
+      seerr.getPersonDetails(Number(param(match, "id"))),
+      seerr.getPersonCombinedCredits(Number(param(match, "id"))),
     ]);
     return json(res, { ...details, combinedCredits: credits });
   }
@@ -310,9 +331,7 @@ async function handleApi(
 
       const enriched = await Promise.all(
         mediaData.results.map(async (item) => {
-          const mediaType = item.mediaType ?? (item as Record<string, unknown>).mediaType as string;
-          const tmdbId = item.tmdbId ?? (item as Record<string, unknown>).tmdbId as number;
-          if (!tmdbId || !mediaType) return null;
+          const { mediaType, tmdbId } = item;
           try {
             if (mediaType === "movie") {
               const m = await seerr.getMovieDetails(tmdbId);
@@ -342,14 +361,14 @@ async function handleApi(
   // GET /api/movie/:id
   match = matchRoute("/api/movie/:id", path);
   if (req.method === "GET" && match) {
-    const data = await seerr.getMovieDetails(Number(match.params.id));
+    const data = await seerr.getMovieDetails(Number(param(match, "id")));
     return json(res, data);
   }
 
   // GET /api/tv/:id
   match = matchRoute("/api/tv/:id", path);
   if (req.method === "GET" && match) {
-    const data = await seerr.getTvDetails(Number(match.params.id));
+    const data = await seerr.getTvDetails(Number(param(match, "id")));
     return json(res, data);
   }
 
@@ -369,14 +388,14 @@ async function handleApi(
   match = matchRoute("/api/discover/upcoming/:type", path);
   if (req.method === "GET" && match) {
     const page = Number(url.searchParams.get("page") ?? "1");
-    const data = await seerr.discoverUpcoming(match.params.type as "movie" | "tv", page);
+    const data = await seerr.discoverUpcoming(param(match, "type") as "movie" | "tv", page);
     return json(res, data);
   }
 
   // GET /api/discover/:type?genre=28&page=1&sortBy=...&yearGte=...&yearLte=...&ratingGte=...&ratingLte=...
   match = matchRoute("/api/discover/:type", path);
   if (req.method === "GET" && match) {
-    const type = match.params.type as "movie" | "tv";
+    const type = param(match, "type") as "movie" | "tv";
     const genre = url.searchParams.get("genre");
     const data = await seerr.discover(type, {
       genre: genre ? Number(genre) : undefined,
@@ -395,20 +414,29 @@ async function handleApi(
 
   // POST /api/request
   if (req.method === "POST" && path === "/api/request") {
-    if (!canRequest(auth.userId!)) {
+    if (!canRequest(auth.userId)) {
       return error(res, "Too many requests", 429);
     }
-    const body = JSON.parse(await readBody(req));
-    const seerrUserId = accountStore.get(auth.userId!)!.seerrUserId;
+    const body = JSON.parse(await readBody(req)) as {
+      mediaType: "movie" | "tv";
+      mediaId: number;
+      seasons?: number[];
+      is4k?: boolean;
+    };
+    const account = accountStore.get(auth.userId);
+    if (!account) return error(res, "Account not linked", 403);
+    const seerrUserId = account.seerrUserId;
 
     // Route anime to dedicated Sonarr if configured
     let serverId: number | undefined;
     if (body.mediaType === "tv" && capabilities.animeSonarrId) {
       try {
         const details = await seerr.getTvDetails(body.mediaId);
-        const isAnime = details.keywords?.some((k) => k.id === 210024);
+        const isAnime = details.keywords.some((k) => k.id === 210024);
         if (isAnime) serverId = capabilities.animeSonarrId;
-      } catch { /* use default */ }
+      } catch {
+        /* use default */
+      }
     }
 
     const result = await seerr.createRequest({
@@ -424,7 +452,8 @@ async function handleApi(
 
   // GET /api/requests?page=1
   if (req.method === "GET" && path === "/api/requests") {
-    const account = accountStore.get(auth.userId!)!;
+    const account = accountStore.get(auth.userId);
+    if (!account) return error(res, "Account not linked", 403);
 
     const page = Number(url.searchParams.get("page") ?? "1");
     const take = 15;
@@ -450,7 +479,9 @@ async function handleApi(
             title = t.name ?? title;
             posterPath = t.posterPath;
           }
-        } catch { /* use fallback title */ }
+        } catch {
+          /* use fallback title */
+        }
         return {
           id: req.id,
           tmdbId: req.media.tmdbId,
@@ -470,7 +501,8 @@ async function handleApi(
 
   // GET /api/quota
   if (req.method === "GET" && path === "/api/quota") {
-    const account = accountStore.get(auth.userId!)!;
+    const account = accountStore.get(auth.userId);
+    if (!account) return error(res, "Account not linked", 403);
     const quota = await seerr.getUserQuota(account.seerrUserId);
     return json(res, quota);
   }
@@ -501,7 +533,10 @@ async function handleApi(
   // POST /api/admin/link
   if (req.method === "POST" && path === "/api/admin/link") {
     if (auth.userId !== config.ADMIN_USER_ID) return error(res, "Forbidden", 403);
-    const body = JSON.parse(await readBody(req));
+    const body = JSON.parse(await readBody(req)) as {
+      telegramUserId?: number;
+      seerrUserId?: number;
+    };
     const { telegramUserId, seerrUserId } = body;
     if (!telegramUserId || !seerrUserId) return error(res, "Missing telegramUserId or seerrUserId");
 
@@ -509,22 +544,26 @@ async function handleApi(
     if (!seerrUser) return error(res, "Seerr user not found", 404);
 
     const link: AccountLink = {
-      telegramUserId: Number(telegramUserId),
+      telegramUserId,
       seerrUserId: seerrUser.id,
       seerrUsername: seerrUser.username || seerrUser.email,
       linkedAt: Date.now(),
     };
     accountStore.set(link);
-    pendingStore.remove(Number(telegramUserId));
+    pendingStore.remove(telegramUserId);
 
     // Notify the user they've been linked
     if (botInstance && config.MINI_APP_URL) {
       const kb = new InlineKeyboard().webApp("Open Teleseerr", config.MINI_APP_URL);
-      botInstance.api.sendMessage(
-        Number(telegramUserId),
-        "Your account has been linked! You can now browse and request media.",
-        { reply_markup: kb },
-      ).catch(e => log.error(e, "Failed to notify user about linking"));
+      botInstance.api
+        .sendMessage(
+          telegramUserId,
+          "Your account has been linked! You can now browse and request media.",
+          { reply_markup: kb },
+        )
+        .catch((e: unknown) => {
+          log.error(e, "Failed to notify user about linking");
+        });
     }
 
     return json(res, link, 201);
@@ -533,10 +572,10 @@ async function handleApi(
   // POST /api/admin/ignore
   if (req.method === "POST" && path === "/api/admin/ignore") {
     if (auth.userId !== config.ADMIN_USER_ID) return error(res, "Forbidden", 403);
-    const body = JSON.parse(await readBody(req));
+    const body = JSON.parse(await readBody(req)) as { telegramUserId?: number };
     const { telegramUserId } = body;
     if (!telegramUserId) return error(res, "Missing telegramUserId");
-    pendingStore.ignore(Number(telegramUserId));
+    pendingStore.ignore(telegramUserId);
     return json(res, { success: true });
   }
 
@@ -549,20 +588,20 @@ async function handleApi(
   // POST /api/admin/unignore
   if (req.method === "POST" && path === "/api/admin/unignore") {
     if (auth.userId !== config.ADMIN_USER_ID) return error(res, "Forbidden", 403);
-    const body = JSON.parse(await readBody(req));
+    const body = JSON.parse(await readBody(req)) as { telegramUserId?: number };
     const { telegramUserId } = body;
     if (!telegramUserId) return error(res, "Missing telegramUserId");
-    pendingStore.unignore(Number(telegramUserId));
+    pendingStore.unignore(telegramUserId);
     return json(res, { success: true });
   }
 
   // POST /api/admin/unlink
   if (req.method === "POST" && path === "/api/admin/unlink") {
     if (auth.userId !== config.ADMIN_USER_ID) return error(res, "Forbidden", 403);
-    const body = JSON.parse(await readBody(req));
+    const body = JSON.parse(await readBody(req)) as { telegramUserId?: number };
     const { telegramUserId } = body;
     if (!telegramUserId) return error(res, "Missing telegramUserId");
-    accountStore.delete(Number(telegramUserId));
+    accountStore.delete(telegramUserId);
     return json(res, { success: true });
   }
 
@@ -582,9 +621,7 @@ export function startServer(bot: Bot): void {
     return;
   }
 
-  const webhookPath = config.WEBHOOK_SECRET
-    ? `/webhook/${config.WEBHOOK_SECRET}`
-    : "";
+  const webhookPath = config.WEBHOOK_SECRET ? `/webhook/${config.WEBHOOK_SECRET}` : "";
 
   if (webhookPath) {
     log.info("Seerr webhook endpoint enabled");
@@ -593,7 +630,7 @@ export function startServer(bot: Bot): void {
   }
 
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url!, `http://localhost`);
+    const url = new URL(req.url ?? "/", `http://localhost`);
     const path = url.pathname;
 
     try {
@@ -626,17 +663,17 @@ export function startServer(bot: Bot): void {
   });
 
   server.listen(config.MINI_APP_PORT, () => {
-    log.info(
-      { port: config.MINI_APP_PORT },
-      "Mini App server started",
-    );
+    log.info({ port: config.MINI_APP_PORT }, "Mini App server started");
   });
 
   // Fetch bot username for Login Widget
-  bot.api.getMe().then((me) => {
-    botUsername = me.username;
-    log.info({ botUsername }, "Bot username cached for Login Widget");
-  }).catch((e) => {
-    log.warn(e, "Failed to fetch bot username for Login Widget");
-  });
+  bot.api
+    .getMe()
+    .then((me) => {
+      botUsername = me.username;
+      log.info({ botUsername }, "Bot username cached for Login Widget");
+    })
+    .catch((e: unknown) => {
+      log.warn(e, "Failed to fetch bot username for Login Widget");
+    });
 }

@@ -8,6 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # tsx watch src/index.ts (live reload)
 npm run build        # tsc → dist/
 npm start            # node dist/index.js
+npm run lint         # eslint src/
+npm run lint:fix     # eslint src/ --fix
+npm run format       # prettier --write src/
+npm run format:check # prettier --check src/
+npm run typecheck    # tsc --noEmit
 ```
 
 No test suite exists.

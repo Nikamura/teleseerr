@@ -10,7 +10,6 @@ function optional(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
 }
 
-
 export const config = {
   TELEGRAM_BOT_TOKEN: required("TELEGRAM_BOT_TOKEN"),
   SEERR_URL: required("SEERR_URL").replace(/\/$/, ""),

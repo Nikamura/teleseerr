@@ -165,7 +165,14 @@ export type PersonCreditCast = {
 
 export type PersonCombinedCredits = {
   cast: PersonCreditCast[];
-  crew: { id: number; mediaType: string; title?: string; name?: string; job: string; posterPath: string | null }[];
+  crew: {
+    id: number;
+    mediaType: string;
+    title?: string;
+    name?: string;
+    job: string;
+    posterPath: string | null;
+  }[];
 };
 
 export type MediaItem = {
@@ -233,9 +240,9 @@ export type AccountLink = {
 
 export type PendingUser = {
   telegramUserId: number;
-  firstName?: string;
-  lastName?: string;
-  username?: string;
+  firstName?: string | undefined;
+  lastName?: string | undefined;
+  username?: string | undefined;
   requestedAt: number;
 };
 
@@ -246,7 +253,14 @@ export type SeerrUserListResponse = {
 
 export type CreateRequestResult = {
   success: boolean;
-  requestId?: number;
-  status?: RequestStatus;
-  error?: "DUPLICATE" | "QUOTA" | "BLACKLISTED" | "NO_PERMISSION" | "NO_SEASONS" | "UNKNOWN";
+  requestId?: number | undefined;
+  status?: RequestStatus | number | undefined;
+  error?:
+    | "DUPLICATE"
+    | "QUOTA"
+    | "BLACKLISTED"
+    | "NO_PERMISSION"
+    | "NO_SEASONS"
+    | "UNKNOWN"
+    | undefined;
 };
