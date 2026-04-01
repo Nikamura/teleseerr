@@ -21,7 +21,11 @@ export function handleCapabilities({ res }: RouteContext): void {
   json(res, { has4kMovie: capabilities.has4kMovie, has4kTv: capabilities.has4kTv });
 }
 
-export async function handleMovieRecommendations({ res, url, params }: RouteContext): Promise<void> {
+export async function handleMovieRecommendations({
+  res,
+  url,
+  params,
+}: RouteContext): Promise<void> {
   json(res, await seerr.getMovieRecommendations(numParam(params, "id"), pageParam(url)));
 }
 

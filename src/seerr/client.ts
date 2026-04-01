@@ -115,10 +115,7 @@ export function getTrending(page = 1): Promise<SearchResponse> {
   return get(`/discover/trending?page=${page}`);
 }
 
-export function getUsers(opts?: {
-  take?: number;
-  skip?: number;
-}): Promise<SeerrUserListResponse> {
+export function getUsers(opts?: { take?: number; skip?: number }): Promise<SeerrUserListResponse> {
   const params = new URLSearchParams();
   if (opts?.take) params.set("take", String(opts.take));
   if (opts?.skip) params.set("skip", String(opts.skip));
