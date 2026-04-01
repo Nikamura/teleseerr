@@ -4,7 +4,8 @@ import { log } from "./logger.js";
 import { loadCapabilities } from "./capabilities.js";
 import { autoLinkAdmin } from "./handlers/link.js";
 import { startServer } from "./server.js";
-import { accountStore, pendingStore } from "./stores.js";
+import { addPendingAndNotify } from "./pending.js";
+import { accountStore } from "./stores.js";
 
 const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
 
@@ -31,28 +32,12 @@ bot.command("start", async (ctx) => {
 
   const userId = ctx.from?.id;
   if (userId && userId !== config.ADMIN_USER_ID && !accountStore.get(userId)) {
-    const isNew = pendingStore.add({
-      telegramUserId: userId,
+    addPendingAndNotify(bot, {
+      userId,
       firstName: ctx.from?.first_name,
       lastName: ctx.from?.last_name,
       username: ctx.from?.username,
-      requestedAt: Date.now(),
     });
-    if (isNew) {
-      const name =
-        [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(" ") || "Unknown";
-      const userTag = ctx.from?.username ? ` (@${ctx.from.username})` : "";
-      const adminKb = new InlineKeyboard().webApp("Link account", config.MINI_APP_URL);
-      bot.api
-        .sendMessage(
-          config.ADMIN_USER_ID,
-          `New user wants access!\n\nName: ${name}${userTag}\nTelegram ID: ${userId}`,
-          { reply_markup: adminKb },
-        )
-        .catch((e: unknown) => {
-          log.error(e, "Failed to notify admin about unlinked user");
-        });
-    }
   }
 
   const kb = new InlineKeyboard().webApp("Open Teleseerr", config.MINI_APP_URL);

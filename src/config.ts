@@ -10,12 +10,26 @@ function optional(key: string, fallback: string): string {
   return process.env[key] ?? fallback;
 }
 
+function requiredInt(key: string): number {
+  const val = Number(required(key));
+  if (isNaN(val)) throw new Error(`${key} must be a number`);
+  return val;
+}
+
+function optionalInt(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const val = Number(raw);
+  if (isNaN(val)) throw new Error(`${key} must be a number, got "${raw}"`);
+  return val;
+}
+
 export const config = {
   TELEGRAM_BOT_TOKEN: required("TELEGRAM_BOT_TOKEN"),
   SEERR_URL: required("SEERR_URL").replace(/\/$/, ""),
   SEERR_API_KEY: required("SEERR_API_KEY"),
-  ADMIN_USER_ID: Number(required("TELESEERR_ADMIN_USER_ID")),
-  ADMIN_SEERR_USER_ID: Number(optional("TELESEERR_ADMIN_SEERR_USER_ID", "1")),
+  ADMIN_USER_ID: requiredInt("TELESEERR_ADMIN_USER_ID"),
+  ADMIN_SEERR_USER_ID: optionalInt("TELESEERR_ADMIN_SEERR_USER_ID", 1),
 
   TMDB_IMAGE_BASE: optional("TMDB_IMAGE_BASE", "https://image.tmdb.org/t/p"),
 
@@ -23,11 +37,7 @@ export const config = {
   DATA_DIR: optional("TELESEERR_DATA_DIR", "./data"),
   LOG_LEVEL: optional("LOG_LEVEL", "info"),
   WEBHOOK_SECRET: optional("TELESEERR_WEBHOOK_SECRET", ""),
-  MINI_APP_PORT: Number(optional("TELESEERR_MINI_APP_PORT", "3000")),
+  MINI_APP_PORT: optionalInt("TELESEERR_MINI_APP_PORT", 3000),
   MINI_APP_URL: optional("TELESEERR_MINI_APP_URL", ""),
   ANIME_SONARR_ID: optional("TELESEERR_ANIME_SONARR_ID", ""),
 } as const;
-
-if (isNaN(config.ADMIN_USER_ID)) {
-  throw new Error("TELESEERR_ADMIN_USER_ID must be a number");
-}

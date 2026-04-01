@@ -521,6 +521,23 @@ html, body {
   cursor: not-allowed;
 }
 
+.request-bar-4k {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.request-bar-4k input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 16px;
+  height: 16px;
+}
+
 /* ── Back Button ──────────────────────────── */
 
 .back-row {

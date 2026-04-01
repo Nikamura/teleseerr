@@ -23,6 +23,7 @@ let previousView = "trending";
 let userState = null; // { linked, seerrUserId, seerrUsername, isAdmin, telegramUserId }
 let activeFilters = { movie: {}, tv: {}, anime: {} };
 let navigationStack = []; // for nested back navigation (person -> detail -> list)
+let caps = { has4kMovie: false, has4kTv: false };
 
 // ── Auth ─────────────────────────────────────
 
@@ -236,18 +237,19 @@ function switchTab(tab) {
 }
 
 async function loadTabContent(tab) {
+  if (tab === "admin") {
+    await showAdmin();
+    return;
+  }
+
   const view = document.getElementById(`${tab}-view`);
 
   if (tab === "trending") {
     await loadDiscoverPage(view);
-  }
-
-  if (tab === "movies" || tab === "tv" || tab === "anime") {
+  } else if (tab === "movies" || tab === "tv" || tab === "anime") {
     const type = tab === "movies" ? "movie" : tab === "anime" ? "anime" : "tv";
     await loadGenreView(type, view);
-  }
-
-  if (tab === "requests") {
+  } else if (tab === "requests") {
     await loadRequests(view);
   }
 }
@@ -776,7 +778,7 @@ function renderDetail(type, d) {
         const result = await apiPost("/api/request", {
           mediaType: "movie",
           mediaId: d.id,
-          is4k: false,
+          is4k: !!document.getElementById("request-4k-cb")?.checked,
         });
         hideLoading();
         if (result.success) {
@@ -786,7 +788,7 @@ function renderDetail(type, d) {
         } else {
           toast(formatError(result.error));
         }
-      });
+      }, caps.has4kMovie);
     }
   } else {
     html += renderSeasonPicker(d);
@@ -1028,7 +1030,7 @@ function updateTvRequestBar(show) {
       mediaType: "tv",
       mediaId: show.id,
       seasons: sorted,
-      is4k: false,
+      is4k: !!document.getElementById("request-4k-cb")?.checked,
     });
     hideLoading();
     if (result.success) {
@@ -1039,7 +1041,7 @@ function updateTvRequestBar(show) {
     } else {
       toast(formatError(result.error));
     }
-  });
+  }, caps.has4kTv);
 }
 
 // ── Person View ─────────────────────────────
@@ -1197,12 +1199,12 @@ function goBackFromPerson() {
 
 // ── Request Bar ──────────────────────────────
 
-function showRequestBar(label, handler) {
+function showRequestBar(label, handler, show4k = false) {
   removeRequestBar();
   const bar = document.createElement("div");
   bar.className = "request-bar";
   bar.id = "request-bar";
-  bar.innerHTML = `<button>&#9875; ${escHtml(label)}</button>`;
+  bar.innerHTML = `${show4k ? '<label class="request-bar-4k"><input type="checkbox" id="request-4k-cb"> 4K</label>' : ""}<button>&#9875; ${escHtml(label)}</button>`;
   bar.querySelector("button").onclick = handler;
   document.body.appendChild(bar);
 }
@@ -1218,7 +1220,7 @@ function formatError(error) {
     case "BLACKLISTED": return "Title is blacklisted";
     case "NO_PERMISSION": return "No permission";
     case "NO_SEASONS": return "Already requested or available";
-    default: return "Something went wrong";
+    default: return `Request failed: ${error || "unknown error"}`;
   }
 }
 
@@ -1424,7 +1426,9 @@ async function loadPendingUsers() {
 
     list.querySelectorAll(".admin-ignore-btn").forEach((btn) => {
       btn.onclick = async () => {
+        showLoading();
         await apiPost("/api/admin/ignore", { telegramUserId: Number(btn.dataset.tgId) });
+        hideLoading();
         toast("User ignored");
         loadPendingUsers();
         loadIgnoredUsers();
@@ -1466,7 +1470,9 @@ async function loadIgnoredUsers() {
 
     list.querySelectorAll(".admin-unignore-btn").forEach((btn) => {
       btn.onclick = async () => {
+        showLoading();
         await apiPost("/api/admin/unignore", { telegramUserId: Number(btn.dataset.tgId) });
+        hideLoading();
         toast("User restored — they can request access again");
         loadIgnoredUsers();
       };
@@ -1665,26 +1671,11 @@ async function init() {
   initSearch();
   initProfileBtn();
 
+  // Fetch capabilities for 4K support
+  api("/api/capabilities").then((c) => { caps = c; }).catch(() => {});
+
   // Load initial content
   loadTabContent("trending");
-
-  // Load admin panel when admin tab is selected
-  if (userState.isAdmin) {
-    const origSwitchTab = switchTab;
-    // Admin tab content loads on first switch
-  }
 }
-
-// Override loadTabContent to handle admin
-const _origLoadTabContent = loadTabContent;
-async function loadTabContentWithAdmin(tab) {
-  if (tab === "admin") {
-    await showAdmin();
-    return;
-  }
-  return _origLoadTabContent(tab);
-}
-// Patch
-loadTabContent = loadTabContentWithAdmin;
 
 init();
