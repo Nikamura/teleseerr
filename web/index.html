@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Find Movies & TV Shows</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Top bar: search + profile -->
+    <div class="top-bar">
+      <div class="search-bar">
+        <input type="text" id="search-input" placeholder="Search movies & shows..." autocomplete="off">
+      </div>
+      <button class="profile-btn" id="profile-btn" title="Profile">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Tab navigation -->
+    <nav class="tabs" id="tabs-nav">
+      <button class="tab active" data-tab="trending">Trending</button>
+      <button class="tab" data-tab="movies">Movies</button>
+      <button class="tab" data-tab="tv">TV Shows</button>
+      <button class="tab" data-tab="anime">Anime</button>
+      <button class="tab" data-tab="requests">My Requests</button>
+    </nav>
+
+    <!-- Content area -->
+    <main id="content">
+      <div id="trending-view" class="view active"></div>
+      <div id="movies-view" class="view"></div>
+      <div id="tv-view" class="view"></div>
+      <div id="anime-view" class="view"></div>
+      <div id="search-view" class="view"></div>
+      <div id="requests-view" class="view"></div>
+      <div id="detail-view" class="view"></div>
+      <div id="person-view" class="view"></div>
+      <div id="profile-view" class="view"></div>
+      <div id="admin-view" class="view"></div>
+      <div id="unlinked-view" class="view"></div>
+    </main>
+
+    <!-- Loading overlay -->
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

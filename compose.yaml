@@ -1,0 +1,26 @@
+services:
+  teleseerr:
+    build: .
+    container_name: teleseerr
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELESEERR_TELEGRAM_BOT_TOKEN}
+      - SEERR_URL=http://seerr:5055
+      - SEERR_API_KEY=${TELESEERR_SEERR_API_KEY}
+      - TELESEERR_ADMIN_USER_ID=${TELESEERR_ADMIN_USER_ID}
+      - TELESEERR_ADMIN_SEERR_USER_ID=${TELESEERR_ADMIN_SEERR_USER_ID:-1}
+      - TELESEERR_MINI_APP_URL=${TELESEERR_MINI_APP_URL:-}
+      - NODE_ENV=production
+    volumes:
+      - teleseerr-data:/app/data
+    ports:
+      - 3000:3000
+    networks:
+      - arr_default
+    restart: unless-stopped
+
+volumes:
+  teleseerr-data:
+
+networks:
+  arr_default:
+    external: true
