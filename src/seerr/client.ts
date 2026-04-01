@@ -33,22 +33,22 @@ async function seerrFetch(path: string, init?: RequestInit): Promise<Response> {
   return res;
 }
 
-export async function search(query: string, page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(`/search?query=${encodeURIComponent(query)}&page=${page}`);
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+async function get<T>(path: string): Promise<T> {
+  const res = await seerrFetch(path);
+  if (!res.ok) throw new Error(`Seerr request failed: ${res.status} ${path}`);
+  return res.json() as Promise<T>;
 }
 
-export async function getMovieDetails(tmdbId: number): Promise<MovieDetails> {
-  const res = await seerrFetch(`/movie/${tmdbId}`);
-  if (!res.ok) throw new Error(`Movie details failed: ${res.status}`);
-  return res.json() as Promise<MovieDetails>;
+export function search(query: string, page = 1): Promise<SearchResponse> {
+  return get(`/search?query=${encodeURIComponent(query)}&page=${page}`);
 }
 
-export async function getTvDetails(tmdbId: number): Promise<TvDetails> {
-  const res = await seerrFetch(`/tv/${tmdbId}`);
-  if (!res.ok) throw new Error(`TV details failed: ${res.status}`);
-  return res.json() as Promise<TvDetails>;
+export function getMovieDetails(tmdbId: number): Promise<MovieDetails> {
+  return get(`/movie/${tmdbId}`);
+}
+
+export function getTvDetails(tmdbId: number): Promise<TvDetails> {
+  return get(`/tv/${tmdbId}`);
 }
 
 export async function createRequest(payload: {
@@ -89,7 +89,7 @@ export async function createRequest(payload: {
   return { success: false, error: "UNKNOWN" };
 }
 
-export async function getRequests(opts: {
+export function getRequests(opts: {
   take?: number;
   skip?: number;
   filter?: string;
@@ -104,33 +104,25 @@ export async function getRequests(opts: {
   if (opts.requestedBy) params.set("requestedBy", String(opts.requestedBy));
   params.set("sortDirection", "desc");
 
-  const res = await seerrFetch(`/request?${params}`);
-  if (!res.ok) throw new Error(`Get requests failed: ${res.status}`);
-  return res.json() as Promise<RequestListResponse>;
+  return get(`/request?${params}`);
 }
 
-export async function getUserQuota(seerrUserId: number): Promise<UserQuota> {
-  const res = await seerrFetch(`/user/${seerrUserId}/quota`);
-  if (!res.ok) throw new Error(`Get quota failed: ${res.status}`);
-  return res.json() as Promise<UserQuota>;
+export function getUserQuota(seerrUserId: number): Promise<UserQuota> {
+  return get(`/user/${seerrUserId}/quota`);
 }
 
-export async function getTrending(page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(`/discover/trending?page=${page}`);
-  if (!res.ok) throw new Error(`Trending failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+export function getTrending(page = 1): Promise<SearchResponse> {
+  return get(`/discover/trending?page=${page}`);
 }
 
-export async function getUsers(opts?: {
+export function getUsers(opts?: {
   take?: number;
   skip?: number;
 }): Promise<SeerrUserListResponse> {
   const params = new URLSearchParams();
   if (opts?.take) params.set("take", String(opts.take));
   if (opts?.skip) params.set("skip", String(opts.skip));
-  const res = await seerrFetch(`/user?${params}`);
-  if (!res.ok) throw new Error(`Get users failed: ${res.status}`);
-  return res.json() as Promise<SeerrUserListResponse>;
+  return get(`/user?${params}`);
 }
 
 export async function getUser(seerrUserId: number): Promise<SeerrUser | null> {
@@ -164,7 +156,7 @@ export async function getGenres(type: "movie" | "tv"): Promise<{ id: number; nam
   return res.json() as Promise<{ id: number; name: string }[]>;
 }
 
-export async function discover(
+export function discover(
   type: "movie" | "tv",
   opts: {
     genre?: number | undefined;
@@ -195,52 +187,36 @@ export async function discover(
   if (opts.withRuntimeLte) params.set("withRuntimeLte", opts.withRuntimeLte);
   if (opts.keywords) params.set("keywords", opts.keywords);
   const endpoint = type === "movie" ? "movies" : "tv";
-  const res = await seerrFetch(`/discover/${endpoint}?${params}`);
-  if (!res.ok) throw new Error(`Discover failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+  return get(`/discover/${endpoint}?${params}`);
 }
 
-export async function getMovieRecommendations(tmdbId: number, page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(`/movie/${tmdbId}/recommendations?page=${page}`);
-  if (!res.ok) throw new Error(`Recommendations failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+export function getMovieRecommendations(tmdbId: number, page = 1): Promise<SearchResponse> {
+  return get(`/movie/${tmdbId}/recommendations?page=${page}`);
 }
 
-export async function getMovieSimilar(tmdbId: number, page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(`/movie/${tmdbId}/similar?page=${page}`);
-  if (!res.ok) throw new Error(`Similar failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+export function getMovieSimilar(tmdbId: number, page = 1): Promise<SearchResponse> {
+  return get(`/movie/${tmdbId}/similar?page=${page}`);
 }
 
-export async function getTvRecommendations(tmdbId: number, page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(`/tv/${tmdbId}/recommendations?page=${page}`);
-  if (!res.ok) throw new Error(`Recommendations failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+export function getTvRecommendations(tmdbId: number, page = 1): Promise<SearchResponse> {
+  return get(`/tv/${tmdbId}/recommendations?page=${page}`);
 }
 
-export async function getTvSimilar(tmdbId: number, page = 1): Promise<SearchResponse> {
-  const res = await seerrFetch(`/tv/${tmdbId}/similar?page=${page}`);
-  if (!res.ok) throw new Error(`Similar failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+export function getTvSimilar(tmdbId: number, page = 1): Promise<SearchResponse> {
+  return get(`/tv/${tmdbId}/similar?page=${page}`);
 }
 
-export async function getPersonDetails(personId: number): Promise<PersonDetails> {
-  const res = await seerrFetch(`/person/${personId}`);
-  if (!res.ok) throw new Error(`Person details failed: ${res.status}`);
-  return res.json() as Promise<PersonDetails>;
+export function getPersonDetails(personId: number): Promise<PersonDetails> {
+  return get(`/person/${personId}`);
 }
 
-export async function getPersonCombinedCredits(personId: number): Promise<PersonCombinedCredits> {
-  const res = await seerrFetch(`/person/${personId}/combined_credits`);
-  if (!res.ok) throw new Error(`Person credits failed: ${res.status}`);
-  return res.json() as Promise<PersonCombinedCredits>;
+export function getPersonCombinedCredits(personId: number): Promise<PersonCombinedCredits> {
+  return get(`/person/${personId}/combined_credits`);
 }
 
-export async function discoverUpcoming(type: "movie" | "tv", page = 1): Promise<SearchResponse> {
+export function discoverUpcoming(type: "movie" | "tv", page = 1): Promise<SearchResponse> {
   const endpoint = type === "movie" ? "movies/upcoming" : "tv/upcoming";
-  const res = await seerrFetch(`/discover/${endpoint}?page=${page}`);
-  if (!res.ok) throw new Error(`Upcoming failed: ${res.status}`);
-  return res.json() as Promise<SearchResponse>;
+  return get(`/discover/${endpoint}?page=${page}`);
 }
 
 export async function getRecentlyAdded(
