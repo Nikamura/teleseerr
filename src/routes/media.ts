@@ -1,8 +1,19 @@
+import type { Bot } from "grammy";
 import { json, error, parseJsonBody, numParam, pageParam, type RouteContext } from "../http.js";
 import { canRequest, canSearch, accountStore } from "../stores.js";
 import * as seerr from "../seerr/client.js";
 import { capabilities } from "../capabilities.js";
 import { log } from "../logger.js";
+import { sendAutoApproveNotification } from "../notifications.js";
+import { RequestStatus } from "../types.js";
+
+// ── Bot Instance ─────────────────────────────────
+
+let botInstance: Bot | null = null;
+
+export function setMediaBotInstance(bot: Bot): void {
+  botInstance = bot;
+}
 
 // ── Media Routes ──────────────────────────────────
 
@@ -158,6 +169,10 @@ export async function handleRequest({ req, res, auth }: RouteContext): Promise<v
     serverId,
   });
   json(res, result, result.success ? 201 : 400);
+
+  if (result.success && result.status === RequestStatus.APPROVED && botInstance) {
+    sendAutoApproveNotification(botInstance, auth.userId, mediaType, mediaId);
+  }
 }
 
 export async function handleRequests({ res, url, auth }: RouteContext): Promise<void> {

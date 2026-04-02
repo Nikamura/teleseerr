@@ -1,6 +1,7 @@
 import type { Bot } from "grammy";
 import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
+import * as seerr from "./seerr/client.js";
 
 // ── Seerr Webhook Payload ─────────────────────────
 
@@ -40,7 +41,6 @@ function buildMessage(notificationType: string, subject: string): string | null 
     case "MEDIA_AVAILABLE":
       return `✅ *${title}* is now available\\! Time to watch, matey\\! 🏴‍☠️`;
     case "MEDIA_APPROVED":
-    case "MEDIA_AUTO_APPROVED":
       return `⚙️ *${title}* has been approved and is being downloaded\\!`;
     case "MEDIA_DECLINED":
       return `🔴 *${title}* request was declined by the admiral\\.`;
@@ -87,4 +87,41 @@ export async function handleWebhook(payload: SeerrWebhookPayload, bot: Bot): Pro
       "Failed to send webhook notification",
     );
   }
+}
+
+// ── Auto-Approve Notification ──────────────────────
+
+export function sendAutoApproveNotification(
+  bot: Bot,
+  telegramUserId: number,
+  mediaType: "movie" | "tv",
+  tmdbId: number,
+): void {
+  (async () => {
+    let title: string;
+    try {
+      if (mediaType === "movie") {
+        const details = await seerr.getMovieDetails(tmdbId);
+        title = details.title ?? `TMDB#${tmdbId}`;
+      } else {
+        const details = await seerr.getTvDetails(tmdbId);
+        title = details.name ?? `TMDB#${tmdbId}`;
+      }
+    } catch {
+      title = `TMDB#${tmdbId}`;
+    }
+
+    const escaped = escNotify(title);
+    await bot.api.sendMessage(
+      telegramUserId,
+      `⚙️ *${escaped}* has been approved and is being downloaded\\!`,
+      { parse_mode: "MarkdownV2" },
+    );
+    log.info({ telegramUser: telegramUserId, mediaType, tmdbId }, "Auto-approve notification sent");
+  })().catch((e: unknown) => {
+    log.warn(
+      { telegramUser: telegramUserId, mediaType, tmdbId, err: e },
+      "Failed to send auto-approve notification",
+    );
+  });
 }

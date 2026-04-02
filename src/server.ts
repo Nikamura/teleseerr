@@ -35,6 +35,7 @@ import {
   handleRequest,
   handleRequests,
   handleQuota,
+  setMediaBotInstance,
 } from "./routes/media.js";
 import {
   handleAdminPending,
@@ -153,6 +154,7 @@ async function handleApi(
 export function startServer(bot: Bot): void {
   botInstance = bot;
   setAdminBotInstance(bot);
+  setMediaBotInstance(bot);
 
   if (!config.MINI_APP_URL) {
     log.info("Mini App disabled (TELESEERR_MINI_APP_URL not set)");

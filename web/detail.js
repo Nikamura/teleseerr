@@ -176,9 +176,14 @@ export function renderDetail(type, d) {
         });
         hideLoading();
         if (result.success) {
-          toast("Request submitted!");
           removeRequestBar();
-          view.querySelector(".detail-status").innerHTML = "&#9203; Requested";
+          if (result.status === 2) {
+            toast("Request approved!");
+            view.querySelector(".detail-status").innerHTML = "&#9881;&#65039; Approved &mdash; downloading";
+          } else {
+            toast("Request submitted!");
+            view.querySelector(".detail-status").innerHTML = "&#9203; Requested";
+          }
         } else {
           toast(formatError(result.error));
         }
@@ -468,7 +473,7 @@ export function updateTvRequestBar(show) {
     });
     hideLoading();
     if (result.success) {
-      toast(`${label} requested!`);
+      toast(result.status === 2 ? `${label} approved!` : `${label} requested!`);
       removeRequestBar();
       selectedSeasons.clear();
       openDetail("tv", show.id);
