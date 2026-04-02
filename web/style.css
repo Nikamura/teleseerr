@@ -343,6 +343,140 @@ html, body {
   font-weight: 500;
 }
 
+/* ── Download Progress ───────────────────────── */
+
+.download-progress {
+  padding: 8px 16px 16px;
+}
+
+.download-progress-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.download-item {
+  margin-bottom: 12px;
+}
+
+.download-item:last-child {
+  margin-bottom: 0;
+}
+
+.download-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.download-ep-label {
+  font-weight: 600;
+  color: var(--foreground);
+  flex-shrink: 0;
+}
+
+.download-ep-title {
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.download-percent {
+  font-weight: 600;
+  color: var(--foreground);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.download-eta {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.download-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.download-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  background: var(--primary);
+}
+
+.download-bar-fill.downloading {
+  animation: progress-pulse 2s ease-in-out infinite;
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.download-bar-fill.paused {
+  background: var(--muted-foreground);
+}
+
+.download-bar-fill.queued {
+  background: var(--muted-foreground);
+  width: 0% !important;
+}
+
+.download-bar-fill.importing {
+  background: rgba(34, 197, 94, 0.85);
+}
+
+.download-bar-fill.stalled,
+.download-bar-fill.failed {
+  background: var(--destructive);
+}
+
+.download-note {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.download-skeleton {
+  padding: 8px 16px 16px;
+}
+
+.download-skeleton-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--muted);
+  overflow: hidden;
+  margin-top: 24px;
+}
+
+.download-skeleton-bar::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--muted) 0%, var(--border) 50%, var(--muted) 100%);
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
 .detail-links {
   display: flex;
   gap: 8px;

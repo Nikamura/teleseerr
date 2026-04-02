@@ -1,12 +1,15 @@
 import { config } from "./config.js";
 import { log } from "./logger.js";
 import * as seerr from "./seerr/client.js";
+import { isProgressEnabled } from "./arr/client.js";
 
 // Fetched once on startup — what the Seerr instance supports
 export const capabilities = {
   has4kMovie: false,
   has4kTv: false,
   animeSonarrId: null as number | null,
+  hasProgressRadarr: false,
+  hasProgressSonarr: false,
 };
 
 export async function loadCapabilities(): Promise<void> {
@@ -31,5 +34,15 @@ export async function loadCapabilities(): Promise<void> {
     );
   } catch (e) {
     log.warn(e, "Failed to load Seerr capabilities — 4K buttons disabled");
+  }
+
+  const progress = isProgressEnabled();
+  capabilities.hasProgressRadarr = progress.radarr;
+  capabilities.hasProgressSonarr = progress.sonarr;
+
+  if (progress.radarr || progress.sonarr) {
+    log.info({ radarr: progress.radarr, sonarr: progress.sonarr }, "Download progress enabled");
+  } else {
+    log.info("Download progress disabled (no Sonarr/Radarr configured)");
   }
 }

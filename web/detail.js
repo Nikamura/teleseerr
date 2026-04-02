@@ -5,8 +5,101 @@ import {
   getCurrentTab, getCurrentDetail, setCurrentDetail,
   getSelectedSeasons, setSelectedSeasons,
   getNavigationStack, setNavigationStack, getCaps,
+  clearProgressPolling, setProgressInterval,
 } from "./state.js";
 import { renderSliderCard, renderGrid } from "./grid.js";
+
+// ── Download Progress ────────────────────────
+
+/**
+ * @param {{ available: boolean, items: Array<{percent: number, eta: string|null, status: string, title: string, sizeTotal: number, sizeDownloaded: number, episode?: {season: number, episode: number, title: string}}>, isSeasonPack: boolean }} progress
+ * @param {string} type
+ * @returns {string}
+ */
+function renderProgressSection(progress, type) {
+  if (!progress.available || progress.items.length === 0) return "";
+
+  let html = '<div class="download-progress">';
+  html += '<div class="download-progress-title">Download Progress</div>';
+
+  if (type === "tv" && progress.items.length > 1 && !progress.isSeasonPack) {
+    for (const item of progress.items) {
+      const epLabel = item.episode
+        ? `S${String(item.episode.season).padStart(2, "0")}E${String(item.episode.episode).padStart(2, "0")}`
+        : "";
+      const epTitle = item.episode?.title ?? "";
+      html += `
+        <div class="download-item">
+          <div class="download-item-header">
+            <span class="download-ep-label">${epLabel}</span>
+            <span class="download-ep-title">${escHtml(epTitle)}</span>
+            <span class="download-percent">${item.percent}%</span>
+          </div>
+          <div class="download-bar-track">
+            <div class="download-bar-fill ${item.status}" style="width:${item.percent}%"></div>
+          </div>
+          ${item.eta ? `<div class="download-eta">ETA: ${escHtml(item.eta)}</div>` : ""}
+        </div>`;
+    }
+  } else {
+    const item = progress.items[0];
+    const statusLabel = item.status === "paused" ? " (Paused)"
+      : item.status === "queued" ? " (Queued)"
+      : item.status === "importing" ? " (Importing...)"
+      : item.status === "stalled" ? " (Stalled)"
+      : item.status === "failed" ? " (Failed)"
+      : "";
+
+    html += `
+      <div class="download-item">
+        <div class="download-item-header">
+          <span class="download-percent">${item.percent}%${statusLabel}</span>
+          ${item.eta ? `<span class="download-eta">ETA: ${escHtml(item.eta)}</span>` : ""}
+        </div>
+        <div class="download-bar-track">
+          <div class="download-bar-fill ${item.status}" style="width:${item.percent}%"></div>
+        </div>
+        ${progress.isSeasonPack ? '<div class="download-note">Season pack</div>' : ""}
+      </div>`;
+  }
+
+  html += "</div>";
+  return html;
+}
+
+/**
+ * @param {string} type
+ * @param {number} tmdbId
+ * @param {number} [tvdbId]
+ * @returns {void}
+ */
+function startProgressPolling(type, tmdbId, tvdbId) {
+  clearProgressPolling();
+
+  // Show skeleton while first fetch is in flight
+  const container = document.getElementById("download-progress-container");
+  if (container) {
+    container.innerHTML = '<div class="download-skeleton"><div class="download-skeleton-bar"></div></div>';
+  }
+
+  const fetchAndRender = async () => {
+    try {
+      const qs = type === "tv" && tvdbId ? `?tvdbId=${tvdbId}` : "";
+      const progress = await api(`/api/${type}/${tmdbId}/progress${qs}`);
+      const el = document.getElementById("download-progress-container");
+      if (!el) {
+        clearProgressPolling();
+        return;
+      }
+      el.innerHTML = renderProgressSection(progress, type);
+    } catch {
+      // Progress is supplementary — fail silently
+    }
+  };
+
+  fetchAndRender();
+  setProgressInterval(setInterval(fetchAndRender, 15_000));
+}
 
 // ── Detail View ──────────────────────────────
 
@@ -17,6 +110,7 @@ import { renderSliderCard, renderGrid } from "./grid.js";
  */
 export async function openDetail(type, id) {
   showLoading();
+  clearProgressPolling();
   removeRequestBar();
 
   try {
@@ -156,6 +250,7 @@ export function renderDetail(type, d) {
     <div class="detail-meta">${meta.join("")}</div>
     ${genreTags}
     <div class="detail-status">${statusIcon(status)} ${statusText(status)}</div>
+    <div id="download-progress-container"></div>
     ${providersHtml}
     ${links}
     ${overview ? `<div class="detail-overview">${escHtml(overview)}</div>` : ""}
@@ -204,6 +299,15 @@ export function renderDetail(type, d) {
   });
 
   window.scrollTo(0, 0);
+
+  // Start progress polling if media is downloading
+  const progressCaps = getCaps();
+  const shouldPoll = (status === 3 || status === 4) &&
+    ((type === "movie" && progressCaps.hasProgressRadarr) ||
+     (type === "tv" && progressCaps.hasProgressSonarr));
+  if (shouldPoll) {
+    startProgressPolling(type, d.id, type === "tv" ? d.externalIds?.tvdbId : undefined);
+  }
 
   if (tg) {
     tg.BackButton.show();
@@ -288,6 +392,7 @@ export async function loadDetailSlider(endpoint, containerId, title) {
 
 /** @returns {void} */
 export function goBack() {
+  clearProgressPolling();
   document.getElementById("detail-view").classList.remove("active");
   removeRequestBar();
   setNavigationStack([]);

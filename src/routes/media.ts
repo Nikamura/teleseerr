@@ -2,6 +2,7 @@ import type { Bot } from "grammy";
 import { json, error, parseJsonBody, numParam, pageParam, type RouteContext } from "../http.js";
 import { canRequest, canSearch, accountStore } from "../stores.js";
 import * as seerr from "../seerr/client.js";
+import { getMovieProgress, getTvProgress } from "../arr/client.js";
 import { capabilities } from "../capabilities.js";
 import { log } from "../logger.js";
 import { sendAutoApproveNotification } from "../notifications.js";
@@ -29,7 +30,12 @@ export async function handleSearch({ res, url, auth }: RouteContext): Promise<vo
 }
 
 export function handleCapabilities({ res }: RouteContext): void {
-  json(res, { has4kMovie: capabilities.has4kMovie, has4kTv: capabilities.has4kTv });
+  json(res, {
+    has4kMovie: capabilities.has4kMovie,
+    has4kTv: capabilities.has4kTv,
+    hasProgressRadarr: capabilities.hasProgressRadarr,
+    hasProgressSonarr: capabilities.hasProgressSonarr,
+  });
 }
 
 export async function handleMovieRecommendations({
@@ -220,6 +226,21 @@ export async function handleRequests({ res, url, auth }: RouteContext): Promise<
   );
 
   json(res, { results: enriched, pageInfo: data.pageInfo });
+}
+
+export async function handleMovieProgress({ res, params }: RouteContext): Promise<void> {
+  if (!capabilities.hasProgressRadarr) {
+    return json(res, { available: false, items: [], isSeasonPack: false });
+  }
+  json(res, await getMovieProgress(numParam(params, "id")));
+}
+
+export async function handleTvProgress({ res, url, params }: RouteContext): Promise<void> {
+  if (!capabilities.hasProgressSonarr) {
+    return json(res, { available: false, items: [], isSeasonPack: false });
+  }
+  const tvdbId = url.searchParams.get("tvdbId");
+  json(res, await getTvProgress(numParam(params, "id"), tvdbId ? Number(tvdbId) : undefined));
 }
 
 export async function handleQuota({ res, auth }: RouteContext): Promise<void> {

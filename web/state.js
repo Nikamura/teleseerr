@@ -1,6 +1,6 @@
 /**
  * @typedef {{ linked: boolean, seerrUserId?: number, seerrUsername?: string, isAdmin: boolean, telegramUserId: number }} UserState
- * @typedef {{ has4kMovie: boolean, has4kTv: boolean }} Capabilities
+ * @typedef {{ has4kMovie: boolean, has4kTv: boolean, hasProgressRadarr: boolean, hasProgressSonarr: boolean }} Capabilities
  * @typedef {{ type: string, id: number, data: any }} DetailState
  * @typedef {{ id: number, name: string }} Genre
  * @typedef {{ yearFrom?: string, yearTo?: string, ratingFrom?: string, ratingTo?: string, sortBy?: string }} FilterSet
@@ -99,11 +99,25 @@ export function getNavigationStack() { return _navigationStack; }
 export function setNavigationStack(s) { _navigationStack = s; }
 
 /** @type {Capabilities} */
-let _caps = { has4kMovie: false, has4kTv: false };
+let _caps = { has4kMovie: false, has4kTv: false, hasProgressRadarr: false, hasProgressSonarr: false };
 /** @returns {Capabilities} */
 export function getCaps() { return _caps; }
 /** @param {Capabilities} c */
 export function setCaps(c) { _caps = c; }
+
+/** @type {ReturnType<typeof setInterval> | null} */
+let _progressInterval = null;
+/** @returns {void} */
+export function clearProgressPolling() {
+  if (_progressInterval) {
+    clearInterval(_progressInterval);
+    _progressInterval = null;
+  }
+}
+/** @param {ReturnType<typeof setInterval>} i */
+export function setProgressInterval(i) {
+  _progressInterval = i;
+}
 
 // ── Auth ─────────────────────────────────────
 

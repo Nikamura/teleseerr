@@ -40,4 +40,14 @@ export const config = {
   MINI_APP_PORT: optionalInt("TELESEERR_MINI_APP_PORT", 3000),
   MINI_APP_URL: optional("TELESEERR_MINI_APP_URL", ""),
   ANIME_SONARR_ID: optional("TELESEERR_ANIME_SONARR_ID", ""),
+
+  // Sonarr/Radarr direct API (optional — for download progress)
+  RADARR_URL: optional("TELESEERR_RADARR_URL", "").replace(/\/$/, ""),
+  RADARR_API_KEY: optional("TELESEERR_RADARR_API_KEY", ""),
+  SONARR_URL: optional("TELESEERR_SONARR_URL", "").replace(/\/$/, ""),
+  SONARR_API_KEY: optional("TELESEERR_SONARR_API_KEY", ""),
+  RADARR_4K_URL: optional("TELESEERR_RADARR_4K_URL", "").replace(/\/$/, ""),
+  RADARR_4K_API_KEY: optional("TELESEERR_RADARR_4K_API_KEY", ""),
+  SONARR_4K_URL: optional("TELESEERR_SONARR_4K_URL", "").replace(/\/$/, ""),
+  SONARR_4K_API_KEY: optional("TELESEERR_SONARR_4K_API_KEY", ""),
 } as const;

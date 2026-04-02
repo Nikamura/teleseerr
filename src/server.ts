@@ -35,6 +35,8 @@ import {
   handleRequest,
   handleRequests,
   handleQuota,
+  handleMovieProgress,
+  handleTvProgress,
   setMediaBotInstance,
 } from "./routes/media.js";
 import {
@@ -88,6 +90,8 @@ const routes: Route[] = [
   { method: "GET", pattern: "/api/movie/:id/similar", handler: handleMovieSimilar },
   { method: "GET", pattern: "/api/tv/:id/recommendations", handler: handleTvRecommendations },
   { method: "GET", pattern: "/api/tv/:id/similar", handler: handleTvSimilar },
+  { method: "GET", pattern: "/api/movie/:id/progress", handler: handleMovieProgress },
+  { method: "GET", pattern: "/api/tv/:id/progress", handler: handleTvProgress },
   { method: "GET", pattern: "/api/person/:id", handler: handlePerson },
   { method: "GET", pattern: "/api/recently-added", handler: handleRecentlyAdded },
   { method: "GET", pattern: "/api/movie/:id", handler: handleMovieDetails },

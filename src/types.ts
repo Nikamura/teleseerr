@@ -251,6 +251,48 @@ export type SeerrUserListResponse = {
   results: SeerrUser[];
 };
 
+// ── Arr Queue Types ─────────────────────────────
+
+export type ArrQueueItem = {
+  id: number;
+  title: string;
+  size: number;
+  sizeleft: number;
+  timeleft: string | null;
+  status: string;
+  trackedDownloadState: string;
+  trackedDownloadStatus: string;
+  errorMessage?: string;
+  movie?: { tmdbId: number };
+  series?: { tmdbId: number; tvdbId?: number };
+  episode?: { seasonNumber: number; episodeNumber: number; title: string };
+};
+
+export type ArrQueueResponse = {
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  records: ArrQueueItem[];
+};
+
+// ── Progress API Response Types ─────────────────
+
+export type DownloadProgress = {
+  percent: number;
+  eta: string | null;
+  status: "downloading" | "paused" | "queued" | "importing" | "stalled" | "failed";
+  title: string;
+  sizeTotal: number;
+  sizeDownloaded: number;
+  episode?: { season: number; episode: number; title: string };
+};
+
+export type ProgressResponse = {
+  available: boolean;
+  items: DownloadProgress[];
+  isSeasonPack: boolean;
+};
+
 export type CreateRequestResult = {
   success: boolean;
   requestId?: number | undefined;
