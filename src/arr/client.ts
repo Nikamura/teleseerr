@@ -1,6 +1,11 @@
 import { config } from "../config.js";
 import { log } from "../logger.js";
-import type { ArrQueueItem, ArrQueueResponse, DownloadProgress, ProgressResponse } from "../types.js";
+import type {
+  ArrQueueItem,
+  ArrQueueResponse,
+  DownloadProgress,
+  ProgressResponse,
+} from "../types.js";
 
 // ── Instance Configuration ──────────────────────
 
@@ -16,16 +21,36 @@ function getInstances(): { radarr: ArrInstance[]; sonarr: ArrInstance[] } {
   const sonarr: ArrInstance[] = [];
 
   if (config.RADARR_URL && config.RADARR_API_KEY) {
-    radarr.push({ name: "radarr", url: config.RADARR_URL, apiKey: config.RADARR_API_KEY, type: "radarr" });
+    radarr.push({
+      name: "radarr",
+      url: config.RADARR_URL,
+      apiKey: config.RADARR_API_KEY,
+      type: "radarr",
+    });
   }
   if (config.RADARR_4K_URL && config.RADARR_4K_API_KEY) {
-    radarr.push({ name: "radarr4k", url: config.RADARR_4K_URL, apiKey: config.RADARR_4K_API_KEY, type: "radarr" });
+    radarr.push({
+      name: "radarr4k",
+      url: config.RADARR_4K_URL,
+      apiKey: config.RADARR_4K_API_KEY,
+      type: "radarr",
+    });
   }
   if (config.SONARR_URL && config.SONARR_API_KEY) {
-    sonarr.push({ name: "sonarr", url: config.SONARR_URL, apiKey: config.SONARR_API_KEY, type: "sonarr" });
+    sonarr.push({
+      name: "sonarr",
+      url: config.SONARR_URL,
+      apiKey: config.SONARR_API_KEY,
+      type: "sonarr",
+    });
   }
   if (config.SONARR_4K_URL && config.SONARR_4K_API_KEY) {
-    sonarr.push({ name: "sonarr4k", url: config.SONARR_4K_URL, apiKey: config.SONARR_4K_API_KEY, type: "sonarr" });
+    sonarr.push({
+      name: "sonarr4k",
+      url: config.SONARR_4K_URL,
+      apiKey: config.SONARR_4K_API_KEY,
+      type: "sonarr",
+    });
   }
 
   return { radarr, sonarr };
@@ -61,9 +86,7 @@ const PAGE_SIZE = 100;
 async function fetchQueue(instance: ArrInstance): Promise<ArrQueueItem[]> {
   try {
     const params =
-      instance.type === "radarr"
-        ? "includeMovie=true"
-        : "includeEpisode=true&includeSeries=true";
+      instance.type === "radarr" ? "includeMovie=true" : "includeEpisode=true&includeSeries=true";
 
     const items: ArrQueueItem[] = [];
     let page = 1;
@@ -84,7 +107,10 @@ async function fetchQueue(instance: ArrInstance): Promise<ArrQueueItem[]> {
       }
 
       const data = (await res.json()) as ArrQueueResponse;
-      log.debug({ instance: instance.name, page, records: data.records.length, ms }, "arr queue fetch");
+      log.debug(
+        { instance: instance.name, page, records: data.records.length, ms },
+        "arr queue fetch",
+      );
       items.push(...data.records);
       totalRecords = data.totalRecords;
       page++;
@@ -175,10 +201,7 @@ export async function getMovieProgress(tmdbId: number): Promise<ProgressResponse
   return { available: true, items, isSeasonPack: false };
 }
 
-export async function getTvProgress(
-  tmdbId: number,
-  tvdbId?: number,
-): Promise<ProgressResponse> {
+export async function getTvProgress(tmdbId: number, tvdbId?: number): Promise<ProgressResponse> {
   const { sonarr } = getInstances();
   if (sonarr.length === 0) return EMPTY_RESPONSE;
 
