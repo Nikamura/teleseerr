@@ -107,6 +107,14 @@ export function getRequests(opts: {
   return get(`/request?${params}`);
 }
 
+export async function getRequest(
+  requestId: number,
+): Promise<{ requestedBy: { id: number } } | null> {
+  const res = await seerrFetch(`/request/${requestId}`);
+  if (!res.ok) return null;
+  return res.json() as Promise<{ requestedBy: { id: number } }>;
+}
+
 export function getUserQuota(seerrUserId: number): Promise<UserQuota> {
   return get(`/user/${seerrUserId}/quota`);
 }

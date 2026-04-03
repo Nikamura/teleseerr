@@ -17,9 +17,6 @@ export type SeerrWebhookPayload = {
   };
   request?: {
     request_id?: string;
-    requestedBy_username?: string;
-    requestedBy_email?: string;
-    requestedBy_avatar?: string;
   };
   extra?: unknown[];
 };
@@ -30,8 +27,8 @@ function escNotify(text: string): string {
   return text.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
 }
 
-function findTelegramUserByUsername(username: string): number | undefined {
-  return accountStore.getAll().find((l) => l.seerrUsername === username)?.telegramUserId;
+function findTelegramUserBySeerrId(seerrUserId: number): number | undefined {
+  return accountStore.getAll().find((l) => l.seerrUserId === seerrUserId)?.telegramUserId;
 }
 
 function buildMessage(notificationType: string, subject: string): string | null {
@@ -64,12 +61,19 @@ export async function handleWebhook(payload: SeerrWebhookPayload, bot: Bot): Pro
     return;
   }
 
-  // Try to find the telegram user — by username from the webhook payload
-  const username = request?.requestedBy_username ?? request?.requestedBy_email;
-  const telegramUserId = username ? findTelegramUserByUsername(username) : undefined;
+  // Resolve Telegram user via Seerr request → requestedBy user ID → account link
+  const requestId = request?.request_id ? Number(request.request_id) : undefined;
+  let telegramUserId: number | undefined;
+
+  if (requestId) {
+    const seerrRequest = await seerr.getRequest(requestId);
+    if (seerrRequest) {
+      telegramUserId = findTelegramUserBySeerrId(seerrRequest.requestedBy.id);
+    }
+  }
 
   if (!telegramUserId) {
-    log.warn({ notification_type, username }, "No linked Telegram user for webhook notification");
+    log.warn({ notification_type, requestId }, "No linked Telegram user for webhook notification");
     return;
   }
 
