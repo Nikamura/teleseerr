@@ -3,6 +3,7 @@ import type { Bot } from "grammy";
 import { config } from "./config.js";
 import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
+import * as seerr from "./seerr/client.js";
 import { handleWebhook, type SeerrWebhookPayload } from "./notifications.js";
 import { addPendingAndNotify } from "./pending.js";
 import { authenticate, type ValidAuth } from "./auth.js";
@@ -58,7 +59,7 @@ let botInstance: Bot | null = null;
 
 // ── Me Handler (uses local botInstance) ───────────
 
-function handleMe(res: ServerResponse, auth: ValidAuth): void {
+async function handleMe(res: ServerResponse, auth: ValidAuth): Promise<void> {
   const account = accountStore.get(auth.userId);
 
   if (!account && auth.userId !== config.ADMIN_USER_ID && botInstance) {
@@ -70,10 +71,17 @@ function handleMe(res: ServerResponse, auth: ValidAuth): void {
     });
   }
 
+  let avatar: string | undefined;
+  if (account) {
+    const seerrUser = await seerr.getUser(account.seerrUserId).catch(() => null);
+    avatar = seerrUser?.avatar;
+  }
+
   json(res, {
     linked: !!account,
     seerrUserId: account?.seerrUserId,
     seerrUsername: account?.seerrUsername,
+    avatar,
     isAdmin: auth.userId === config.ADMIN_USER_ID,
     telegramUserId: auth.userId,
   });
