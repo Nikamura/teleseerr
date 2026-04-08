@@ -12,8 +12,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1(grammy@1.41.1)
       dotenv:
-        specifier: ^17.3.1
-        version: 17.3.1
+        specifier: ^17.4.1
+        version: 17.4.1
       grammy:
         specifier: ^1.41.1
         version: 1.41.1
@@ -396,8 +396,8 @@ packages:
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
 
-  dotenv@17.3.1:
-    resolution: {integrity: sha512-IO8C/dzEb6O3F9/twg6ZLXz164a2fhTnEWb95H23Dm4OuN+92NmEAlTrupP9VW6Jm3sO26tQlqyvyi4CsnY9GA==}
+  dotenv@17.4.1:
+    resolution: {integrity: sha512-k8DaKGP6r1G30Lx8V4+pCsLzKr8vLmV2paqEj1Y55GdAgJuIqpRp5FfajGF8KtwMxCz9qJc6wUIJnm053d/WCw==}
     engines: {node: '>=12'}
 
   end-of-stream@1.4.5:
@@ -1037,7 +1037,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  dotenv@17.3.1: {}
+  dotenv@17.4.1: {}
 
   end-of-stream@1.4.5:
     dependencies:
