@@ -1,4 +1,4 @@
-FROM node:25-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 RUN npm install -g pnpm
 COPY package.json pnpm-lock.yaml ./
@@ -8,7 +8,7 @@ COPY src/ src/
 RUN pnpm run build
 RUN pnpm install --frozen-lockfile --prod
 
-FROM node:25-alpine
+FROM node:26-alpine
 WORKDIR /app
 COPY web/ web/
 COPY --from=build /app/node_modules/ node_modules/
