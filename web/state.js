@@ -1,3 +1,7 @@
+import { createRequestQueue } from "./request-queue.js";
+
+const enqueueRequest = createRequestQueue();
+
 /**
  * @typedef {{ linked: boolean, seerrUserId?: number, seerrUsername?: string, avatar?: string, isAdmin: boolean, telegramUserId: number }} UserState
  * @typedef {{ has4kMovie: boolean, has4kTv: boolean, hasProgressRadarr: boolean, hasProgressSonarr: boolean }} Capabilities
@@ -140,11 +144,19 @@ export function getAuthHeaders() {
  * @returns {Promise<any>}
  */
 export async function api(path) {
-  const res = await fetch(path, {
-    headers: getAuthHeaders(),
+  return enqueueRequest(async () => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(path, { headers: getAuthHeaders() });
+      if (res.status === 429 && attempt === 0) {
+        const seconds = Number(res.headers.get("Retry-After")) || 2;
+        await res.body?.cancel();
+        await new Promise((resolve) => setTimeout(resolve, Math.min(5, Math.max(1, seconds)) * 1000));
+        continue;
+      }
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      return res.json();
+    }
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return res.json();
 }
 
 /**
@@ -153,15 +165,17 @@ export async function api(path) {
  * @returns {Promise<any>}
  */
 export async function apiPost(path, body) {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(),
-    },
-    body: JSON.stringify(body),
+  return enqueueRequest(async () => {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(body),
+    });
+    return res.json();
   });
-  return res.json();
 }
 
 // ── Helpers ──────────────────────────────────
