@@ -47,12 +47,25 @@ type Release = {
   episodeNumbers?: number[];
   infoHash?: string;
 };
+type Episode = {
+  id: number;
+  seriesId: number;
+  seasonNumber: number;
+  episodeNumber: number;
+  title: string;
+  airDateUtc?: string;
+  hasFile: boolean;
+  monitored: boolean;
+};
+type Series = { id: number; tmdbId?: number; tvdbId?: number; monitored: boolean };
+type MissingTarget = { tmdbId: number; episodeId: number };
 type Selection = {
   user: number;
   instance: ArrInstance;
   group: QueueItem[];
   releases: Release[];
   expires: number;
+  missing?: MissingTarget;
 };
 const selections = new Map<string, Selection>();
 const busy = new Set<string>();
@@ -86,11 +99,18 @@ function reserve(key: string): void {
   writeFileSync(`${ledgerPath}.tmp`, JSON.stringify(next), { mode: 0o600 });
   renameSync(`${ledgerPath}.tmp`, ledgerPath);
 }
-function audit(user: number, instance: string, queueId: number, event: string): void {
+function audit(
+  user: number,
+  instance: string,
+  queueId: number,
+  event: string,
+  episodeId?: number,
+): void {
   mkdirSync(config.DATA_DIR, { recursive: true });
   appendFileSync(
     join(config.DATA_DIR, "download-activity.jsonl"),
-    JSON.stringify({ at: new Date().toISOString(), user, instance, queueId, event }) + "\n",
+    JSON.stringify({ at: new Date().toISOString(), user, instance, queueId, episodeId, event }) +
+      "\n",
     { mode: 0o600 },
   );
 }
@@ -165,14 +185,19 @@ function firstItem(group: QueueItem[]): QueueItem {
 function scopeKey(instance: ArrInstance, group: QueueItem[]): string {
   return `${instance.name}:${firstItem(group).movieId ?? firstItem(group).seriesId}`;
 }
-export function releaseProblems(release: Release, group: QueueItem[]): string[] {
+export function releaseProblems(
+  release: Release,
+  group: QueueItem[],
+  allowQueueConflicts = true,
+): string[] {
   const reasons = [...(release.rejections ?? [])].filter(
     (reason) =>
+      !allowQueueConflicts ||
       !/^(?:Quality for release in queue already meets cutoff:|Release in queue (?:already meets cutoff:|is of equal or higher (?:preference|revision):|meets (?:quality|Custom Format) cutoff:|has (?:an equal or higher Custom Format score:|Custom Format score within Custom Format score increment:)|and Quality Profile '.+' does not allow upgrades$))/.test(
         reason,
       ),
   );
-  if (release.protocol !== "torrent") reasons.push("Only torrent replacements are supported");
+  if (release.protocol !== "torrent") reasons.push("Only torrent downloads are supported");
   if (!release.guid || !Number.isSafeInteger(release.indexerId))
     reasons.push("Release identity unavailable");
   if (release.downloadAllowed === false) reasons.push("Download not allowed by the service");
@@ -201,49 +226,167 @@ export function releaseProblems(release: Release, group: QueueItem[]): string[] 
   }
   return reasons;
 }
+async function findSeries(instance: ArrInstance, tmdbId: number): Promise<Series | undefined> {
+  const tv = await seerr.getTvDetails(tmdbId);
+  const series = await arr<Series[]>(instance, "series");
+  const matches = series.filter(
+    (s) =>
+      s.tmdbId === tmdbId ||
+      ((!s.tmdbId || s.tmdbId === tmdbId) &&
+        !!tv.externalIds.tvdbId &&
+        s.tvdbId === tv.externalIds.tvdbId),
+  );
+  if (matches.length > 1) throw new ClientError(409, "Series mapping is ambiguous");
+  return matches[0];
+}
+export function episodeState(episode: Episode, transfers: QueueItem[], now = Date.now()): string {
+  if (episode.hasFile) return "available";
+  if (transfers.length) {
+    if (
+      transfers.some(
+        (i) =>
+          ["importPending", "importing"].includes(i.trackedDownloadState ?? "") || i.sizeleft === 0,
+      )
+    )
+      return "importing";
+    if (transfers.some((i) => i.status === "failed" || i.trackedDownloadState === "failedPending"))
+      return "failed";
+    if (transfers.some((i) => i.status === "paused")) return "paused";
+    if (transfers.some((i) => i.status === "queued")) return "queued";
+    if (transfers.some((i) => i.status === "warning")) return "attention";
+    return "downloading";
+  }
+  const airTime = Date.parse(episode.airDateUtc ?? "");
+  if (!Number.isFinite(airTime)) return "unknown";
+  if (airTime > now) return "unaired";
+  return "missing";
+}
+async function missingGroup(instance: ArrInstance, target: MissingTarget): Promise<QueueItem[]> {
+  if (
+    instance.type !== "sonarr" ||
+    !Number.isSafeInteger(target.tmdbId) ||
+    target.tmdbId <= 0 ||
+    !Number.isSafeInteger(target.episodeId) ||
+    target.episodeId <= 0
+  )
+    throw new ClientError(400, "Invalid episode target");
+  const series = await findSeries(instance, target.tmdbId);
+  if (!series?.monitored) throw new ClientError(409, "Series is not monitored in the library");
+  const episode = await arr<Episode>(instance, `episode/${target.episodeId}`);
+  if (episode.seriesId !== series.id)
+    throw new ClientError(400, "Episode does not belong to this series");
+  const transfers = (await queue(instance)).filter(
+    (i) => i.seriesId === series.id && i.episodeId === episode.id,
+  );
+  if (!episode.monitored || episodeState(episode, transfers) !== "missing")
+    throw new ClientError(
+      409,
+      "Episode is no longer missing, is not monitored, or has not aired. Refresh episodes.",
+    );
+  return [
+    {
+      id: 0,
+      downloadId: "",
+      title: "",
+      size: 0,
+      sizeleft: 0,
+      status: "missing",
+      seriesId: series.id,
+      episodeId: episode.id,
+      episode: { seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber },
+    },
+  ];
+}
 export async function handleDownloads({ auth, params, res }: RouteContext): Promise<void> {
-  authorize(auth.userId);
   const id = Number(params["id"]),
     type = params["type"];
   if (!Number.isSafeInteger(id) || id <= 0 || !["movie", "tv"].includes(type ?? ""))
     throw new ClientError(400, "Invalid title");
-  const tv = type === "tv" ? await seerr.getTvDetails(id) : undefined;
   const instances = getInstances()[type === "movie" ? "radarr" : "sonarr"];
+  const canManage = canManageDownloads(auth.userId);
   const results = await Promise.all(
     instances.map(async (instance) => {
+      const series = type === "tv" ? await findSeries(instance, id) : undefined;
       const items = await queue(instance);
       const matched = items.filter((i) =>
-        type === "movie"
-          ? i.movie?.tmdbId === id
-          : i.series?.tmdbId === id ||
-            (!!tv?.externalIds.tvdbId && i.series?.tvdbId === tv.externalIds.tvdbId),
+        type === "movie" ? i.movie?.tmdbId === id : !!series && i.seriesId === series.id,
       );
+      const episodes = series
+        ? await arr<Episode[]>(instance, `episode?seriesId=${series.id}`)
+        : [];
       const seen = new Set<string>();
-      return matched
-        .filter((i) => {
-          if (!i.downloadId || seen.has(i.downloadId)) return false;
-          seen.add(i.downloadId);
-          return true;
-        })
-        .map((i) => ({
-          instance: instance.name,
-          queueId: i.id,
-          title: i.title,
-          status: i.status,
-          eta: i.timeleft ?? null,
-          percent:
-            i.size > 0
-              ? Math.max(0, Math.min(100, Math.round(((i.size - i.sizeleft) / i.size) * 100)))
-              : 0,
-          episodes: items
-            .filter((other) => other.downloadId === i.downloadId)
-            .map((other) => other.episode)
-            .filter(Boolean),
-          canReplace: editable(i),
-        }));
+      return {
+        instance: instance.name,
+        inLibrary: !!series,
+        episodes: episodes
+          .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber)
+          .map((episode) => {
+            const transfers = matched.filter((i) => i.episodeId === episode.id);
+            const state = episodeState(episode, transfers);
+            const transfer = transfers.find(editable);
+            const percent =
+              transfers[0] && transfers[0].size > 0
+                ? Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      Math.round(
+                        ((transfers[0].size - transfers[0].sizeleft) / transfers[0].size) * 100,
+                      ),
+                    ),
+                  )
+                : undefined;
+            return {
+              id: episode.id,
+              season: episode.seasonNumber,
+              episode: episode.episodeNumber,
+              title: episode.title,
+              airDate: episode.airDateUtc ?? null,
+              state,
+              percent,
+              monitored: !!series?.monitored && episode.monitored,
+              canSearch:
+                canManage &&
+                ((state === "missing" && !!series?.monitored && episode.monitored) || !!transfer),
+              ...(transfer ? { queueId: transfer.id } : {}),
+            };
+          }),
+        items: matched
+          .filter((i) => {
+            if (!i.downloadId || seen.has(i.downloadId)) return false;
+            seen.add(i.downloadId);
+            return true;
+          })
+          .map((i) => ({
+            instance: instance.name,
+            queueId: i.id,
+            title: i.title,
+            status: i.status,
+            eta: i.timeleft ?? null,
+            percent:
+              i.size > 0
+                ? Math.max(0, Math.min(100, Math.round(((i.size - i.sizeleft) / i.size) * 100)))
+                : 0,
+            episodes: items
+              .filter((other) => other.downloadId === i.downloadId)
+              .map((other) => other.episode)
+              .filter(Boolean),
+            canReplace: canManage && editable(i),
+          })),
+      };
     }),
   );
-  json(res, { configured: instances.length > 0, items: results.flat(), updatedAt: Date.now() });
+  json(res, {
+    configured: instances.length > 0,
+    items: results.flatMap((r) => r.items),
+    libraries: results.map(({ instance, inLibrary, episodes }) => ({
+      instance,
+      inLibrary,
+      episodes,
+    })),
+    canManage,
+    updatedAt: Date.now(),
+  });
 }
 export async function handleReleaseSearch({ auth, req, res }: RouteContext): Promise<void> {
   authorize(auth.userId);
@@ -254,7 +397,16 @@ export async function handleReleaseSearch({ auth, req, res }: RouteContext): Pro
   lastSearch.set(auth.userId, Date.now());
   for (const [id, value] of selections) if (value.expires < Date.now()) selections.delete(id);
   if (selections.size >= 100) throw new ClientError(429, "Too many active searches");
-  const group = groupFor(await queue(instance), body["queueId"]);
+  const missing =
+    body["queueId"] === undefined
+      ? {
+          tmdbId: Number(body["tmdbId"]),
+          episodeId: Number(body["episodeId"]),
+        }
+      : undefined;
+  const group = missing
+    ? await missingGroup(instance, missing)
+    : groupFor(await queue(instance), body["queueId"]);
   const first = firstItem(group);
   const query =
     instance.type === "radarr"
@@ -276,10 +428,12 @@ export async function handleReleaseSearch({ auth, req, res }: RouteContext): Pro
     group,
     releases,
     expires: Date.now() + 120_000,
+    ...(missing ? { missing } : {}),
   });
   json(res, {
     token,
     pack: group.length > 1,
+    action: missing ? "download" : "replace",
     releases: releases.map((r, index) => ({
       index,
       title: r.title,
@@ -287,7 +441,7 @@ export async function handleReleaseSearch({ auth, req, res }: RouteContext): Pro
       seeders: r.seeders ?? null,
       quality: r.quality?.quality?.name ?? "Unknown",
       languages: r.languages?.map((l) => l.name) ?? [],
-      problems: releaseProblems(r, group),
+      problems: releaseProblems(r, group, !missing),
     })),
   });
 }
@@ -303,14 +457,20 @@ export async function handleReleaseSwitch({ auth, req, res }: RouteContext): Pro
     typeof index === "number" && Number.isSafeInteger(index)
       ? selection.releases[index]
       : undefined;
-  if (!release || body["confirmed"] !== true || releaseProblems(release, selection.group).length)
+  if (
+    !release ||
+    body["confirmed"] !== true ||
+    releaseProblems(release, selection.group, !selection.missing).length
+  )
     throw new ClientError(400, "Choose an eligible release and confirm replacement");
   const { instance, group } = selection;
   const key = scopeKey(instance, group);
   if (busy.has(key)) throw new ClientError(409, "Another replacement is in progress");
   busy.add(key);
   try {
-    const current = groupFor(await queue(instance), firstItem(group).id);
+    const current = selection.missing
+      ? await missingGroup(instance, selection.missing)
+      : groupFor(await queue(instance), firstItem(group).id);
     if (
       current.length !== group.length ||
       current.some(
@@ -329,7 +489,13 @@ export async function handleReleaseSwitch({ auth, req, res }: RouteContext): Pro
     authorize(auth.userId);
     reserve(key);
     selections.delete(token); // Never replay a possibly successful grab, including after a timeout.
-    audit(auth.userId, instance.name, firstItem(group).id, "switch_attempted");
+    audit(
+      auth.userId,
+      instance.name,
+      firstItem(group).id,
+      selection.missing ? "download_attempted" : "switch_attempted",
+      selection.missing?.episodeId,
+    );
     try {
       await arr(instance, "release", "POST", {
         guid: release.guid,
@@ -339,11 +505,24 @@ export async function handleReleaseSwitch({ auth, req, res }: RouteContext): Pro
           : { seriesId: firstItem(group).seriesId, episodeIds: group.map((i) => i.episodeId) }),
       });
     } catch {
-      audit(auth.userId, instance.name, firstItem(group).id, "grab_unconfirmed");
+      audit(
+        auth.userId,
+        instance.name,
+        firstItem(group).id,
+        "grab_unconfirmed",
+        selection.missing?.episodeId,
+      );
       throw new ClientError(
         502,
-        "Could not confirm the new download. The old transfer was not removed. Refresh status before trying again.",
+        selection.missing
+          ? "Could not confirm the new download. Refresh episodes before trying again."
+          : "Could not confirm the new download. The old transfer was not removed. Refresh status before trying again.",
       );
+    }
+    if (selection.missing) {
+      audit(auth.userId, instance.name, 0, "download_accepted", selection.missing.episodeId);
+      json(res, { success: true });
+      return;
     }
     // Grab succeeded. Only remove the original identity, never a refreshed/new queue ID.
     let warning: string | undefined;

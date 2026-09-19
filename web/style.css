@@ -1715,3 +1715,16 @@ html, body {
 .release-card button:disabled { opacity: .45; cursor: default; }
 .download-permission { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .admin-user-row { flex-wrap: wrap; gap: 10px; }
+
+.episode-section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.episode-section-header .detail-section-title { margin: 0; }
+.episode-overview strong { color: var(--foreground); }
+.episode-season { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.episode-season summary { cursor: pointer; padding: 12px; font-weight: 600; }
+.episode-season summary span { font-size: 12px; font-weight: 400; color: var(--muted-foreground); margin-left: 8px; }
+.episode-row { padding: 12px; border-top: 1px solid var(--border); }
+.episode-heading { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.episode-state { font-size: 12px; font-weight: 600; }
+.episode-state-available { color: #16803d; }
+.episode-state-missing, .episode-state-failed, .episode-state-attention { color: #b45309; }
+.episode-row .quick-btn { margin-top: 6px; }

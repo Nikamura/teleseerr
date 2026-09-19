@@ -185,21 +185,30 @@ service requests refuse redirects to prevent forwarding API keys elsewhere.
 
 ### Shared download recovery (pilot)
 
-The administrator can recover existing transfers from any title page using
-**Manage downloads → Check downloads → Find alternatives**. Request ownership is
+Title pages automatically show library status. Series pages list episodes by
+season, with available, missing, unaired, and transfer states. All linked users
+can view status. Permitted users can choose **Find releases** for an aired,
+monitored missing episode, or **Find alternatives** for an existing transfer. Request ownership is
 not required. In **Admin → Linked Users**, enable **Manage downloads** for trusted
 users when ready. Existing users default to disabled; the configured administrator
 always has access. Revocation takes effect on the next server request, including
 selections already open in the Mini App. Reopen the app after granting access.
 
 The pilot uses configured standard/4K Radarr and Sonarr instances and supports
-existing movie, episode, and shared season transfers. It does not start missing
-requests, expose arbitrary torrent URLs, override non-queue release rejections,
+existing movie, episode, and shared season transfers, plus missing monitored
+episodes in an existing Sonarr series. It does not add new titles or requests,
+expose arbitrary torrent URLs, override non-queue release rejections,
 or configure a separate anime instance automatically. Reported seed counts do
 not guarantee speed. Choices expire after two minutes; searches have a 30-second
 per-user cooldown. Replacement affects everyone waiting for the shared title.
 
-The server grabs the new release first and requires a distinct replacement
+For a missing episode, the server verifies its series mapping, monitoring, air
+date, file status and absence from the queue both before searching and before
+grabbing. Only a release for that exact episode is selectable; season packs and
+all Arr rejection reasons remain blocked. A missing-episode grab never removes
+a transfer.
+
+For replacements, the server grabs the new release first and requires a distinct replacement
 transfer to become visible before removing the original through Arr. A failed or
 ambiguous grab leaves the old transfer alone. Partial cleanup is reported to the
 user for admin inspection; automatic mutation retries are deliberately avoided.
