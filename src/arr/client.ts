@@ -98,6 +98,7 @@ async function fetchQueue(instance: ArrInstance): Promise<ArrQueueItem[]> {
       const res = await fetch(url, {
         headers: { "X-Api-Key": instance.apiKey },
         signal: AbortSignal.timeout(5000),
+        redirect: "error",
       });
       const ms = Date.now() - start;
 

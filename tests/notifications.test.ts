@@ -7,6 +7,7 @@ import type { Bot } from "grammy";
 
 const dir = mkdtempSync(join(tmpdir(), "teleseerr-notifications-"));
 Object.assign(process.env, {
+  TELESEERR_ALLOW_INSECURE_HTTP: "true",
   TELEGRAM_BOT_TOKEN: "dummy",
   SEERR_URL: "http://seerr.invalid",
   SEERR_API_KEY: "dummy",
@@ -37,6 +38,48 @@ const request = {
   serverId: 1,
   media: { tmdbId: 10 },
 };
+
+test("webhook text cannot spoof a title and inconsistent events send no message", async () => {
+  const [, notifications, { accountStore }] = await modules;
+  accountStore.set({
+    telegramUserId: 12,
+    seerrUserId: 7,
+    seerrUsername: "test",
+    linkedAt: Date.now(),
+  });
+  const messages: string[] = [];
+  const bot = {
+    api: {
+      sendMessage: async (_user: number, text: string) => {
+        messages.push(text);
+      },
+    },
+  } as unknown as Bot;
+  global.fetch = async (input) =>
+    String(input).includes("/request/")
+      ? Response.json({ ...request, type: "tv" })
+      : Response.json({ name: "Trusted title" });
+  await notifications.handleWebhook(
+    {
+      notification_type: "MEDIA_AVAILABLE",
+      request: { request_id: "101" },
+      subject: "Fake download",
+    },
+    bot,
+  );
+  assert.equal(messages.length, 0);
+  await notifications.handleWebhook(
+    {
+      notification_type: "MEDIA_APPROVED",
+      request: { request_id: "101" },
+      subject: "Visit malicious link",
+    },
+    bot,
+  );
+  assert.equal(messages.length, 1);
+  assert(messages[0]?.includes("Trusted title"));
+  assert(!messages[0]?.includes("malicious"));
+});
 
 test("failed request enrichment still delivers the local approval confirmation", async () => {
   const [, notifications] = await modules;

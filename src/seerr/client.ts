@@ -25,7 +25,12 @@ async function seerrFetch(path: string, init?: RequestInit): Promise<Response> {
   };
 
   const start = Date.now();
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...init, headers });
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(10_000),
+    ...init,
+    headers,
+    redirect: "error",
+  });
   const ms = Date.now() - start;
 
   log.debug({ endpoint: path, status: res.status, ms }, "seerr request");
@@ -113,7 +118,7 @@ export type RequestDetails = {
   is4k: boolean;
   type: string;
   serverId?: number;
-  media?: { tmdbId: number };
+  media?: { tmdbId: number; status?: number; status4k?: number };
 };
 
 export async function retryRequest(requestId: number): Promise<void> {

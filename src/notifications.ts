@@ -1,3 +1,4 @@
+import { webhookEvent, matchesRequest } from "./webhook-event.js";
 import { join } from "node:path";
 import { config } from "./config.js";
 import { RetryQueue } from "./retry.js";
@@ -105,58 +106,42 @@ function buildMessage(notificationType: string, subject: string): string | null 
 
 // ── Webhook Handler ─────────────────────────────────
 
-export async function handleWebhook(payload: SeerrWebhookPayload, bot: Bot): Promise<void> {
-  const { notification_type, subject, request } = payload;
-
-  log.info({ notification_type, subject }, "Seerr webhook received");
-
-  let message = buildMessage(notification_type, subject);
-  if (!message) {
-    log.debug({ notification_type }, "Ignoring unhandled webhook type");
+export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
+  const event = webhookEvent(payload);
+  if (!event) return;
+  const { type, requestId } = event;
+  const request = await seerr.getRequest(requestId);
+  if (!request || !matchesRequest(type, request)) {
+    log.debug({ requestId, type }, "Ignoring webhook inconsistent with current Seerr state");
     return;
   }
-
-  // Resolve Telegram user via Seerr request → requestedBy user ID → account link
-  const requestId = request?.request_id ? Number(request.request_id) : undefined;
-  let telegramUserId: number | undefined;
-
-  if (requestId && Number.isSafeInteger(requestId) && requestId > 0) {
-    const seerrRequest = await seerr.getRequest(requestId);
-    if (seerrRequest) {
-      telegramUserId = findTelegramUserBySeerrId(seerrRequest.requestedBy.id);
-      if (notification_type === "MEDIA_AVAILABLE" || notification_type === "MEDIA_DECLINED")
-        retryQueue?.cancel(requestId);
-      if (
-        telegramUserId !== undefined &&
-        notification_type === "MEDIA_FAILED" &&
-        seerrRequest.status === 4 &&
-        retryQueue?.enqueue(requestId, seerrRequest.requestedBy.id)
-      ) {
-        message =
-          "⚠️ *" + escNotify(subject) + "* request failed\\. Automatic retries are scheduled\\.";
-      }
-      if (notification_type === "MEDIA_APPROVED" || notification_type === "MEDIA_AUTO_APPROVED") {
-        message = await approvalMessage(subject, seerrRequest);
-      }
+  const userId = findTelegramUserBySeerrId(request.requestedBy.id);
+  if (userId === undefined) return;
+  // Titles come from the authenticated Seerr API, never webhook-controlled text.
+  let title = "Request #" + String(requestId);
+  if (request.media?.tmdbId) {
+    try {
+      const details =
+        request.type === "movie"
+          ? await seerr.getMovieDetails(request.media.tmdbId)
+          : await seerr.getTvDetails(request.media.tmdbId);
+      title = ("title" in details ? details.title : details.name) ?? title;
+    } catch {
+      /* Safe request-ID fallback; never fall back to webhook subject. */
     }
   }
-
-  if (!telegramUserId || !requestId) {
-    log.warn({ notification_type, requestId }, "No linked Telegram user for webhook notification");
-    return;
+  let message = buildMessage(type, title);
+  if (!message) return;
+  if (type === "MEDIA_AVAILABLE" || type === "MEDIA_DECLINED") retryQueue?.cancel(requestId);
+  if (type === "MEDIA_FAILED" && retryQueue?.enqueue(requestId, request.requestedBy.id)) {
+    message = "⚠️ *" + escNotify(title) + "* request failed\\. Automatic retries are scheduled\\.";
   }
-
+  if (type === "MEDIA_APPROVED" || type === "MEDIA_AUTO_APPROVED")
+    message = await approvalMessage(title, request);
   try {
-    await sendNotification(bot, telegramUserId, requestId, notification_type, message);
-    log.info(
-      { telegramUser: telegramUserId, notification_type, subject },
-      "Webhook notification sent",
-    );
-  } catch (e) {
-    log.warn(
-      { telegramUser: telegramUserId, notification_type, err: e },
-      "Failed to send webhook notification",
-    );
+    await sendNotification(bot, userId, requestId, type, message);
+  } catch (error) {
+    log.warn({ requestId, type, err: error }, "Webhook notification delivery failed");
   }
 }
 

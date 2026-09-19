@@ -65,6 +65,8 @@ bot.catch((err) => {
 
 async function main() {
   log.info("Starting Teleseerr bot...");
+  if (config.ALLOW_INSECURE_HTTP)
+    log.warn("Private HTTP transport explicitly enabled; isolate the service network");
 
   // Fetch Seerr capabilities (4K availability, etc.)
   await loadCapabilities();

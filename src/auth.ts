@@ -17,8 +17,15 @@ export type ValidAuth = {
 // ── Helpers ───────────────────────────────────────
 
 function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+  if (!/^[a-f0-9]{64}$/.test(b)) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+function fresh(value: unknown, maxAge: number): boolean {
+  if (typeof value !== "string" && typeof value !== "number") return false;
+  const date = Number(value);
+  const now = Date.now() / 1000;
+  return Number.isSafeInteger(date) && date > 0 && date <= now + 60 && now - date <= maxAge;
 }
 
 // ── Mini App Init Data (HMAC-SHA256 with bot token) ──
@@ -30,6 +37,8 @@ function validateInitData(initData: string): AuthResult {
   const hash = params.get("hash");
   if (!hash) return { valid: false };
 
+  if (new Set(params.keys()).size !== [...params.keys()].length) return { valid: false };
+  if (!fresh(params.get("auth_date"), 86400)) return { valid: false };
   params.delete("hash");
   const entries = [...params.entries()].sort(([a], [b]) => a.localeCompare(b));
   const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join("\n");
@@ -46,7 +55,8 @@ function validateInitData(initData: string): AuthResult {
       last_name?: string;
       username?: string;
     };
-    if (user.id == null) return { valid: false };
+    if (!Number.isSafeInteger(user.id) || Number(user.id) <= 0 || user.id == null)
+      return { valid: false };
     return {
       valid: true,
       userId: user.id,
@@ -69,8 +79,7 @@ function validateLoginWidget(data: string): AuthResult {
     const { hash, ...rest } = parsed;
     if (typeof hash !== "string") return { valid: false };
 
-    const authDate = Number(rest["auth_date"]);
-    if (isNaN(authDate) || Date.now() / 1000 - authDate > 30 * 86400) {
+    if (!fresh(rest["auth_date"], 30 * 86400)) {
       return { valid: false };
     }
 
@@ -83,7 +92,7 @@ function validateLoginWidget(data: string): AuthResult {
     if (!safeCompare(computedHash, hash)) return { valid: false };
 
     const userId = Number(parsed["id"]);
-    if (isNaN(userId)) return { valid: false };
+    if (!Number.isSafeInteger(userId) || userId <= 0) return { valid: false };
     return {
       valid: true,
       userId,
@@ -100,10 +109,10 @@ function validateLoginWidget(data: string): AuthResult {
 
 export function authenticate(req: IncomingMessage): AuthResult {
   const initData = req.headers["x-telegram-init-data"] as string | undefined;
-  if (initData) return validateInitData(initData);
+  if (typeof initData === "string" && initData) return validateInitData(initData);
 
   const loginData = req.headers["x-telegram-login-data"] as string | undefined;
-  if (loginData) return validateLoginWidget(loginData);
+  if (typeof loginData === "string" && loginData) return validateLoginWidget(loginData);
 
   return { valid: false };
 }

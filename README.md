@@ -152,3 +152,33 @@ settings. `TELESEERR_DOCKER_NETWORK` selects the external Docker network and
 still defaults to `arr_default`. No host-control bind mount is required.
 
 Run `pnpm test` for the retry and notification regression tests.
+
+### Security controls and HTTP migration
+
+Mini App credentials expire 24 hours after Telegram's signed `auth_date`. Reopen
+the Mini App to obtain fresh credentials after expiry. The Login Widget retains
+its 30-day lifetime. Both reject missing, invalid or more than 60-seconds-future
+timestamps; neither policy prevents replay within its validity window.
+
+Authenticated API requests (including `/api/me`) share a per-user burst of 20,
+refilling at one request/second, with two concurrent requests per user and eight
+across the process. The global burst is 60 and refills at three/second. Rejected
+requests return 429 with Retry-After. Webhooks have a separate shared burst of ten,
+refilling at one per two seconds, and at most two concurrent handlers. Limits are
+process-local; retain upstream controls when running multiple instances.
+
+Webhook event types and IDs are validated; current Seerr state must agree with
+the event before notifications or retry cancellation. Titles are fetched from
+Seerr, never trusted from webhook text. Keep the webhook secret private and rotate
+it if exposed: state verification does not replace the secret. Delayed events
+that conflict with current state are ignored. Availability requires completed
+request state or available media in the request's standard/4K tier.
+
+**Before upgrading an HTTP-only installation:** use HTTPS service URLs, or
+explicitly set `TELESEERR_ALLOW_INSECURE_HTTP=true` only for a trusted, isolated
+private network. HTTP is rejected by default for Seerr and all optional Arr URLs;
+the opt-in does not encrypt traffic. Compose forwards this flag with a default of
+false, so its built-in `http://seerr:5055` requires this deliberate choice or an
+HTTPS `SEERR_URL` override. Never enable it for an untrusted network. Service URLs
+cannot contain embedded credentials, queries or fragments, and authenticated
+service requests refuse redirects to prevent forwarding API keys elsewhere.

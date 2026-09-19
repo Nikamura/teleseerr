@@ -1,10 +1,14 @@
+import { Admission } from "./admission.js";
+const apiAdmission = new Admission();
+const webhookAdmission = new Admission(10, 0.5, 2, 2);
+
 import { createServer, type ServerResponse } from "http";
 import type { Bot } from "grammy";
 import { config } from "./config.js";
 import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
 import * as seerr from "./seerr/client.js";
-import { handleWebhook, type SeerrWebhookPayload } from "./notifications.js";
+import { handleWebhook } from "./notifications.js";
 import { addPendingAndNotify } from "./pending.js";
 import { authenticate, type ValidAuth } from "./auth.js";
 import {
@@ -138,27 +142,36 @@ async function handleApi(
   const auth = authenticate(req);
   if (!auth.valid) return error(res, "Unauthorized", 401);
 
-  // Accessible before link check
-  if (req.method === "GET" && path === "/api/me") {
-    return handleMe(res, auth);
+  const release = apiAdmission.acquire(String(auth.userId));
+  if (!release) {
+    res.setHeader("Retry-After", "2");
+    return error(res, "Too many requests", 429);
   }
+  try {
+    // Accessible before link check
+    if (req.method === "GET" && path === "/api/me") {
+      return await handleMe(res, auth);
+    }
 
-  // All other endpoints require linked account (admin always passes)
-  const isAdmin = auth.userId === config.ADMIN_USER_ID;
-  if (!isAdmin && !accountStore.get(auth.userId)) {
-    return error(res, "Account not linked", 403);
+    // All other endpoints require linked account (admin always passes)
+    const isAdmin = auth.userId === config.ADMIN_USER_ID;
+    if (!isAdmin && !accountStore.get(auth.userId)) {
+      return error(res, "Account not linked", 403);
+    }
+
+    for (const route of routes) {
+      if (req.method !== route.method) continue;
+      const params = matchRoute(route.pattern, path);
+      if (!params) continue;
+
+      if (route.admin && !isAdmin) return error(res, "Forbidden", 403);
+      return await route.handler({ req, res, url, params, auth });
+    }
+
+    return error(res, "Not found", 404);
+  } finally {
+    release();
   }
-
-  for (const route of routes) {
-    if (req.method !== route.method) continue;
-    const params = matchRoute(route.pattern, path);
-    if (!params) continue;
-
-    if (route.admin && !isAdmin) return error(res, "Forbidden", 403);
-    return route.handler({ req, res, url, params, auth });
-  }
-
-  return error(res, "Not found", 404);
 }
 
 // ── Server ────────────────────────────────────────
@@ -200,18 +213,27 @@ export function startServer(bot: Bot): void {
           res.end();
           return;
         }
-        let body: Record<string, unknown>;
+        const release = webhookAdmission.acquire("webhook");
+        if (!release) {
+          res.setHeader("Retry-After", "2");
+          return error(res, "Too many requests", 429);
+        }
         try {
-          body = await parseJsonBody(req);
-        } catch {
-          res.writeHead(400);
+          let body: Record<string, unknown>;
+          try {
+            body = await parseJsonBody(req);
+          } catch {
+            res.writeHead(400);
+            res.end();
+            return;
+          }
+          await handleWebhook(body, bot);
+          res.writeHead(204);
           res.end();
           return;
+        } finally {
+          release();
         }
-        await handleWebhook(body as SeerrWebhookPayload, bot);
-        res.writeHead(204);
-        res.end();
-        return;
       }
 
       // API routes
@@ -247,6 +269,8 @@ export function startServer(bot: Bot): void {
     }
   });
 
+  server.requestTimeout = 15_000;
+  server.headersTimeout = 10_000;
   server.listen(config.MINI_APP_PORT, () => {
     log.info({ port: config.MINI_APP_PORT }, "Mini App server started");
   });
