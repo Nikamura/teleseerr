@@ -175,8 +175,7 @@ export function releaseProblems(release: Release, group: QueueItem[]): string[] 
   if (release.protocol !== "torrent") reasons.push("Only torrent replacements are supported");
   if (!release.guid || !Number.isSafeInteger(release.indexerId))
     reasons.push("Release identity unavailable");
-  if (release.downloadAllowed === false && !release.rejections?.length)
-    reasons.push("Download not allowed by the service");
+  if (release.downloadAllowed === false) reasons.push("Download not allowed by the service");
   if (release.rejected && !release.rejections?.length)
     reasons.push("Release rejected by the service");
   if (

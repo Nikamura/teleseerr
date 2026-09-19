@@ -55,6 +55,7 @@ test("permission defaults off, admin on, changes persist and unlinked users lose
 test("only queue conflicts are exempt; quality rejections, same torrent, and mismatched episodes stay blocked", async () => {
   const { releaseProblems } = await import("../src/routes/downloads.js");
   assert.deepEqual(releaseProblems(candidate, [item]), []);
+  assert.ok(releaseProblems({...candidate, downloadAllowed:false}, [item]).length);
   assert.ok(releaseProblems({...candidate, rejections:[...candidate.rejections,"Quality is not wanted"]}, [item]).length);
   assert.ok(releaseProblems({...candidate, infoHash:"OLD-HASH"}, [item]).length);
   const episode = {...item, movieId:undefined, seriesId:4, episodeId:9, episode:{seasonNumber:3, episodeNumber:4}};
