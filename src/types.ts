@@ -298,11 +298,5 @@ export type CreateRequestResult = {
   requestId?: number | undefined;
   status?: RequestStatus | number | undefined;
   error?:
-    | "DUPLICATE"
-    | "QUOTA"
-    | "BLACKLISTED"
-    | "NO_PERMISSION"
-    | "NO_SEASONS"
-    | "UNKNOWN"
-    | undefined;
+    "DUPLICATE" | "QUOTA" | "BLACKLISTED" | "NO_PERMISSION" | "NO_SEASONS" | "UNKNOWN" | undefined;
 };

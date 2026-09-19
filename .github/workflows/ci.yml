@@ -22,7 +22,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm audit --prod
+      - run: pnpm audit
 
       - run: pnpm lint
 
@@ -31,3 +31,5 @@ jobs:
       - run: pnpm test
 
       - run: pnpm typecheck
+
+      - run: pnpm typecheck:web
