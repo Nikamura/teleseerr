@@ -1,3 +1,9 @@
+import {
+  canManageDownloads,
+  handleDownloads,
+  handleReleaseSearch,
+  handleReleaseSwitch,
+} from "./routes/downloads.js";
 import { Admission } from "./admission.js";
 const apiAdmission = new Admission();
 const webhookAdmission = new Admission(10, 0.5, 2, 2);
@@ -45,6 +51,7 @@ import {
   setMediaBotInstance,
 } from "./routes/media.js";
 import {
+  handleAdminDownloadPermission,
   handleAdminPending,
   handleAdminUsers,
   handleAdminSeerrUsers,
@@ -87,6 +94,7 @@ async function handleMe(res: ServerResponse, auth: ValidAuth): Promise<void> {
     seerrUsername: account?.seerrUsername,
     avatar,
     isAdmin: auth.userId === config.ADMIN_USER_ID,
+    manageDownloads: canManageDownloads(auth.userId),
     telegramUserId: auth.userId,
   });
 }
@@ -94,6 +102,15 @@ async function handleMe(res: ServerResponse, auth: ValidAuth): Promise<void> {
 // ── Route Table ───────────────────────────────────
 
 const routes: Route[] = [
+  { method: "GET", pattern: "/api/:type/:id/downloads", handler: handleDownloads },
+  { method: "POST", pattern: "/api/downloads/search", handler: handleReleaseSearch },
+  { method: "POST", pattern: "/api/downloads/switch", handler: handleReleaseSwitch },
+  {
+    method: "POST",
+    pattern: "/api/admin/download-permission",
+    handler: handleAdminDownloadPermission,
+    admin: true,
+  },
   // User routes
   { method: "GET", pattern: "/api/trending", handler: handleTrending },
   { method: "GET", pattern: "/api/search", handler: handleSearch },

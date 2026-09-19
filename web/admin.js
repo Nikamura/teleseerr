@@ -1,4 +1,4 @@
-import { api, apiPost, escHtml, showLoading, hideLoading, toast } from "./state.js";
+import { api, apiPost, escHtml, showLoading, hideLoading, toast, getUserState } from "./state.js";
 
 // ── Admin Panel ──────────────────────────────
 
@@ -54,8 +54,22 @@ export async function loadAdminUsers() {
           <span class="admin-user-tg">TG: ${u.telegramUserId}</span>
           <span class="admin-user-seerr">${escHtml(u.seerrUsername)}</span>
         </div>
+        <label class="download-permission"><input type="checkbox" class="admin-download-permission" data-tg-id="${u.telegramUserId}" ${u.manageDownloads || u.telegramUserId === getUserState()?.telegramUserId ? "checked" : ""} ${u.telegramUserId === getUserState()?.telegramUserId ? "disabled" : ""}> Manage downloads</label>
         <button class="admin-unlink-btn" data-tg-id="${u.telegramUserId}">Unlink</button>
       </div>`).join("");
+
+    list.querySelectorAll(".admin-download-permission").forEach((element) => {
+      const input = /** @type {HTMLInputElement} */ (element);
+      input.onchange = async () => {
+        input.disabled = true;
+        try {
+          const result = await apiPost("/api/admin/download-permission", { telegramUserId: Number(input.dataset.tgId), enabled: input.checked });
+          if (result.error) throw new Error(result.error);
+          toast("Download permission updated");
+        } catch { input.checked = !input.checked; toast("Could not update permission"); }
+        finally { input.disabled = false; }
+      };
+    });
 
     list.querySelectorAll(".admin-unlink-btn").forEach((btn) => {
       /** @type {HTMLElement} */ (btn).onclick = async () => {

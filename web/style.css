@@ -1707,3 +1707,11 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.download-management:not(:empty) { margin: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+.download-management p { font-size: 13px; line-height: 1.5; margin: 10px 0; color: var(--muted-foreground); }
+.release-card { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.release-card strong { font-size: 13px; }
+.release-card button:disabled { opacity: .45; cursor: default; }
+.download-permission { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.admin-user-row { flex-wrap: wrap; gap: 10px; }

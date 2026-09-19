@@ -236,6 +236,7 @@ export type AccountLink = {
   seerrUserId: number;
   seerrUsername: string;
   linkedAt: number;
+  manageDownloads?: boolean;
 };
 
 export type PendingUser = {

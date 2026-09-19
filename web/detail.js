@@ -1,3 +1,4 @@
+import { mountDownloads } from "./downloads.js";
 import {
   tg, TMDB_IMG, api, apiPost,
   posterUrl, year, statusIcon, statusText, statusBadge,
@@ -250,7 +251,7 @@ export function renderDetail(type, d) {
     <div class="detail-meta">${meta.join("")}</div>
     ${genreTags}
     <div class="detail-status">${statusIcon(status)} ${statusText(status)}</div>
-    <div id="download-progress-container"></div>
+    <div id="download-progress-container"></div><div id="download-management" class="download-management"></div>
     ${providersHtml}
     ${links}
     ${overview ? `<div class="detail-overview">${escHtml(overview)}</div>` : ""}
@@ -291,6 +292,7 @@ export function renderDetail(type, d) {
     updateTvRequestBar(d);
   }
 
+  mountDownloads(type, d.id);
   document.getElementById("back-btn").onclick = goBack;
 
   // Attach cast card click handlers

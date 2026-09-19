@@ -9,14 +9,14 @@ import type {
 
 // ── Instance Configuration ──────────────────────
 
-type ArrInstance = {
+export type ArrInstance = {
   name: string;
   url: string;
   apiKey: string;
   type: "radarr" | "sonarr";
 };
 
-function getInstances(): { radarr: ArrInstance[]; sonarr: ArrInstance[] } {
+export function getInstances(): { radarr: ArrInstance[]; sonarr: ArrInstance[] } {
   const radarr: ArrInstance[] = [];
   const sonarr: ArrInstance[] = [];
 
@@ -76,7 +76,7 @@ setInterval(() => {
   for (const [key, entry] of cache) {
     if (now - entry.fetchedAt > CACHE_TTL) cache.delete(key);
   }
-}, 60_000);
+}, 60_000).unref();
 
 // ── Fetch ────────────────────────────────────────
 

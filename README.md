@@ -182,3 +182,33 @@ false, so its built-in `http://seerr:5055` requires this deliberate choice or an
 HTTPS `SEERR_URL` override. Never enable it for an untrusted network. Service URLs
 cannot contain embedded credentials, queries or fragments, and authenticated
 service requests refuse redirects to prevent forwarding API keys elsewhere.
+
+### Shared download recovery (pilot)
+
+The administrator can recover existing transfers from any title page using
+**Manage downloads → Check downloads → Find alternatives**. Request ownership is
+not required. In **Admin → Linked Users**, enable **Manage downloads** for trusted
+users when ready. Existing users default to disabled; the configured administrator
+always has access. Revocation takes effect on the next server request, including
+selections already open in the Mini App. Reopen the app after granting access.
+
+The pilot uses configured standard/4K Radarr and Sonarr instances and supports
+existing movie, episode, and shared season transfers. It does not start missing
+requests, expose arbitrary torrent URLs, override non-queue release rejections,
+or configure a separate anime instance automatically. Reported seed counts do
+not guarantee speed. Choices expire after two minutes; searches have a 30-second
+per-user cooldown. Replacement affects everyone waiting for the shared title.
+
+The server grabs the new release first and requires a distinct replacement
+transfer to become visible before removing the original through Arr. A failed or
+ambiguous grab leaves the old transfer alone. Partial cleanup is reported to the
+user for admin inspection; automatic mutation retries are deliberately avoided.
+The original transfer is removed without blocklisting or triggering another
+search. No completed library files are deleted. The download client's treatment
+of partial files follows Arr's removal behavior.
+
+`links.json` stores permissions. `download-switches.json` persists a two-minute
+per-title switch cooldown before issuing a grab; `download-activity.jsonl` records
+actor, service, queue ID, time, and outcome without indexer URLs or credentials.
+Retain these in the existing data volume and run one process per data directory.
+A damaged cooldown ledger fails closed. Activity log retention is operator-managed.

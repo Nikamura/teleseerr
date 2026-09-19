@@ -3,7 +3,7 @@ import { createRequestQueue } from "./request-queue.js";
 const enqueueRequest = createRequestQueue();
 
 /**
- * @typedef {{ linked: boolean, seerrUserId?: number, seerrUsername?: string, avatar?: string, isAdmin: boolean, telegramUserId: number }} UserState
+ * @typedef {{ linked: boolean, seerrUserId?: number, seerrUsername?: string, avatar?: string, isAdmin: boolean, manageDownloads?: boolean, telegramUserId: number }} UserState
  * @typedef {{ has4kMovie: boolean, has4kTv: boolean, hasProgressRadarr: boolean, hasProgressSonarr: boolean }} Capabilities
  * @typedef {{ type: string, id: number, data: any }} DetailState
  * @typedef {{ id: number, name: string }} Genre

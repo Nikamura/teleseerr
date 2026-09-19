@@ -128,3 +128,28 @@ export async function handleAdminUnlink({ req, res }: RouteContext): Promise<voi
   accountStore.delete(body["telegramUserId"]);
   json(res, { success: true });
 }
+
+export async function handleAdminDownloadPermission({
+  req,
+  res,
+  auth,
+}: RouteContext): Promise<void> {
+  if (auth.userId !== config.ADMIN_USER_ID) return error(res, "Forbidden", 403);
+  const body = await parseJsonBody(req);
+  const id = body["telegramUserId"];
+  if (
+    typeof id !== "number" ||
+    !Number.isSafeInteger(id) ||
+    id <= 0 ||
+    typeof body["enabled"] !== "boolean"
+  )
+    return error(res, "Invalid permission settings");
+  const account = accountStore.get(id);
+  if (!account) return error(res, "Account not linked", 404);
+  accountStore.set({ ...account, manageDownloads: body["enabled"] });
+  log.info(
+    { actor: auth.userId, telegramUserId: id, enabled: body["enabled"] },
+    "download permission changed",
+  );
+  json(res, { success: true });
+}
