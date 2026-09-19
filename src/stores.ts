@@ -176,4 +176,4 @@ setInterval(() => {
   for (const [id, ts] of requestLimiter) {
     if (ts < cutoff) requestLimiter.delete(id);
   }
-}, 60_000);
+}, 60_000).unref();

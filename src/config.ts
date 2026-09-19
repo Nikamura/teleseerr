@@ -24,6 +24,22 @@ function optionalInt(key: string, fallback: number): number {
   return val;
 }
 
+function retryDelays(): number[] {
+  const values = (process.env["TELESEERR_RETRY_DELAYS_SECONDS"] ?? "30,120,300")
+    .split(",")
+    .map(Number);
+  if (
+    values.length < 1 ||
+    values.length > 10 ||
+    values.some((value) => !Number.isSafeInteger(value) || value < 1 || value > 86400)
+  ) {
+    throw new Error(
+      "TELESEERR_RETRY_DELAYS_SECONDS requires 1–10 integer delays between 1 and 86400 seconds",
+    );
+  }
+  return values;
+}
+
 export const config = {
   TELEGRAM_BOT_TOKEN: required("TELEGRAM_BOT_TOKEN"),
   SEERR_URL: required("SEERR_URL").replace(/\/$/, ""),
@@ -39,6 +55,8 @@ export const config = {
   WEBHOOK_SECRET: optional("TELESEERR_WEBHOOK_SECRET", ""),
   MINI_APP_PORT: optionalInt("TELESEERR_MINI_APP_PORT", 3000),
   MINI_APP_URL: optional("TELESEERR_MINI_APP_URL", ""),
+  AUTO_RETRY_FAILED: optional("TELESEERR_AUTO_RETRY_FAILED", "false") === "true",
+  RETRY_DELAYS_SECONDS: retryDelays(),
   ANIME_SONARR_ID: optional("TELESEERR_ANIME_SONARR_ID", ""),
 
   // Sonarr/Radarr direct API (optional — for download progress)

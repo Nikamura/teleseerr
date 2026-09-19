@@ -15,7 +15,7 @@ pnpm format:check    # prettier --check src/
 pnpm typecheck       # tsc --noEmit
 ```
 
-No test suite exists.
+Run `pnpm test` for retry and notification regression tests.
 
 ## Architecture
 
@@ -52,4 +52,4 @@ All env vars prefixed `TELESEERR_` — see `src/config.ts` for the full list and
 
 ### Seerr-only
 
-No direct Sonarr/Radarr API calls. Everything goes through Seerr's API. Season-level granularity only (Seerr's limit).
+Requests and retries go through Seerr. Optional direct Sonarr/Radarr APIs provide download progress and movie release availability. Season-level granularity only (Seerr's limit).

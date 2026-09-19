@@ -177,7 +177,7 @@ export async function handleRequest({ req, res, auth }: RouteContext): Promise<v
   json(res, result, result.success ? 201 : 400);
 
   if (result.success && result.status === RequestStatus.APPROVED && botInstance) {
-    sendAutoApproveNotification(botInstance, auth.userId, mediaType, mediaId);
+    sendAutoApproveNotification(botInstance, auth.userId, mediaType, mediaId, result.requestId);
   }
 }
 

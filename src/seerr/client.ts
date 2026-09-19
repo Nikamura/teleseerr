@@ -25,7 +25,7 @@ async function seerrFetch(path: string, init?: RequestInit): Promise<Response> {
   };
 
   const start = Date.now();
-  const res = await fetch(url, { ...init, headers });
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000), ...init, headers });
   const ms = Date.now() - start;
 
   log.debug({ endpoint: path, status: res.status, ms }, "seerr request");
@@ -107,12 +107,26 @@ export function getRequests(opts: {
   return get(`/request?${params}`);
 }
 
-export async function getRequest(
-  requestId: number,
-): Promise<{ requestedBy: { id: number } } | null> {
+export type RequestDetails = {
+  requestedBy: { id: number };
+  status: number;
+  is4k: boolean;
+  type: string;
+  serverId?: number;
+  media?: { tmdbId: number };
+};
+
+export async function retryRequest(requestId: number): Promise<void> {
+  const res = await seerrFetch(`/request/${requestId}/retry`, { method: "POST" });
+  await res.body?.cancel();
+  if (!res.ok) throw new Error(`Seerr retry failed: ${res.status}`);
+}
+
+export async function getRequest(requestId: number): Promise<RequestDetails | null> {
   const res = await seerrFetch(`/request/${requestId}`);
-  if (!res.ok) return null;
-  return res.json() as Promise<{ requestedBy: { id: number } }>;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Seerr request lookup failed: ${res.status}`);
+  return res.json() as Promise<RequestDetails>;
 }
 
 export function getUserQuota(seerrUserId: number): Promise<UserQuota> {

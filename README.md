@@ -109,3 +109,46 @@ All Seerr API calls use the admin API key, but requests are attributed to the li
 - **Frontend**: Vanilla JS with [Telegram Web App SDK](https://core.telegram.org/bots/webapps)
 - **Runtime**: Node.js 22
 - **Data**: JSON files (no database)
+
+### Automatic request retries
+
+Set `TELESEERR_AUTO_RETRY_FAILED=true` to enable retries of failed requests using
+Seerr's native retry endpoint. This requires `TELESEERR_MINI_APP_URL`, a
+`TELESEERR_WEBHOOK_SECRET`, and Seerr configured to deliver `MEDIA_FAILED`
+webhooks. Retries are disabled by default.
+
+`TELESEERR_RETRY_DELAYS_SECONDS=30,120,300` configures up to ten recovery rounds,
+with each delay between 1 and 86400 seconds. Each round first checks the current
+request and account link; only requests still failed and owned by a linked user
+are retried. Lookup outages consume a round too, so upstream failures cannot
+cause unlimited background work. Requests that are deleted, declined or unlinked
+stop automatically. Approved requests stop polling and can resume on a later
+failure webhook using their remaining budget.
+
+State is atomically saved to `TELESEERR_DATA_DIR/retries.json` (the existing data
+volume). Restarts resume pending work without resetting consumed rounds. Run
+only one Teleseerr process per data directory. Exhausted/cancelled records are
+retained to prevent replay; at 10,000 records, new automatic retries fail closed
+and log an error. Do not delete the ledger to resolve an outage: doing so resets
+retry budgets. A corrupt ledger prevents startup with retries enabled; restore a
+backup or disable retries while investigating. Manual retries remain available
+in Seerr.
+
+### Approval notifications and optional integrations
+
+Approval means **queued for processing**, not necessarily downloading. Movie
+approvals check the matching standard/4K Radarr when its URL and API key are
+configured and Seerr has an unambiguous matching service. Otherwise release
+metadata provides a conservative fallback; no download date is promised.
+Configure direct URLs to match the corresponding Seerr instances.
+
+Local and webhook approval messages share request-ID deduplication for 24 hours
+(up to 10,000 recent events per process). Local confirmations remain enabled even
+when a webhook secret is configured. Delivery failures can be retried by another
+event; a process restart clears notification deduplication, but not retry budgets.
+
+Compose now forwards webhook, anime routing, standard/4K Radarr/Sonarr and retry
+settings. `TELESEERR_DOCKER_NETWORK` selects the external Docker network and
+still defaults to `arr_default`. No host-control bind mount is required.
+
+Run `pnpm test` for the retry and notification regression tests.

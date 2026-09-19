@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { log } from "./logger.js";
 import { loadCapabilities } from "./capabilities.js";
 import { autoLinkAdmin } from "./handlers/link.js";
+import { startRetries } from "./notifications.js";
 import { startServer } from "./server.js";
 import { addPendingAndNotify } from "./pending.js";
 import { accountStore } from "./stores.js";
@@ -91,6 +92,7 @@ async function main() {
   }
 
   // Start Mini App server + webhook endpoint (if configured)
+  startRetries(bot);
   startServer(bot);
 
   log.info({ botUsername: (await bot.api.getMe()).username }, "Bot started");

@@ -12,7 +12,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
-    "typecheck:web": "tsc -p web/tsconfig.json"
+    "typecheck:web": "tsc -p web/tsconfig.json",
+    "test": "tsx --test tests/*.test.ts"
   },
   "keywords": [
     "telegram",
