@@ -9,6 +9,7 @@ import type { AccountLink } from "../types.js";
 // ── Bot Instance (set by server.ts on startup) ───
 
 let botInstance: Bot | null = null;
+const profileLookupAttempts = new Map<number, number>();
 
 export function setAdminBotInstance(bot: Bot): void {
   botInstance = bot;
@@ -72,8 +73,46 @@ export async function handleAdminIgnore({ req, res }: RouteContext): Promise<voi
   json(res, { success: true });
 }
 
-export function handleAdminIgnored({ res }: RouteContext): void {
-  json(res, pendingStore.getIgnored());
+export async function handleAdminIgnored({ res, url }: RouteContext): Promise<void> {
+  // Keep the ID-only response compatible with already-open older clients.
+  if (url.searchParams.get("details") !== "1") return json(res, pendingStore.getIgnored());
+  const bot = botInstance;
+  if (bot) {
+    const users = pendingStore.getIgnoredUsers();
+    const ids = new Set(users.map((user) => user.telegramUserId));
+    for (const id of profileLookupAttempts.keys())
+      if (!ids.has(id)) profileLookupAttempts.delete(id);
+    const missing = users
+      .filter(
+        (user) =>
+          !user.firstName &&
+          !user.username &&
+          Date.now() - (profileLookupAttempts.get(user.telegramUserId) ?? 0) >= 60_000,
+      )
+      .slice(0, 4);
+    await Promise.all(
+      missing.map(async (user) => {
+        profileLookupAttempts.set(user.telegramUserId, Date.now());
+        try {
+          // grammY types reference its AbortSignal polyfill; Node's native signal supports the same API.
+          const signal = AbortSignal.timeout(5000) as unknown as NonNullable<
+            Parameters<typeof bot.api.getChat>[1]
+          >;
+          const chat = await bot.api.getChat(user.telegramUserId, signal);
+          if (chat.type === "private")
+            pendingStore.setIgnoredProfile({
+              telegramUserId: user.telegramUserId,
+              firstName: chat.first_name,
+              lastName: chat.last_name,
+              username: chat.username,
+            });
+        } catch {
+          /* Deleted/inaccessible accounts retain their Telegram ID. */
+        }
+      }),
+    );
+  }
+  json(res, pendingStore.getIgnoredUsers());
 }
 
 export async function handleAdminUnignore({ req, res }: RouteContext): Promise<void> {

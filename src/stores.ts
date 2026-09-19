@@ -72,6 +72,23 @@ const pendingPath = join(config.DATA_DIR, "pending.json");
 const ignoredPath = join(config.DATA_DIR, "ignored.json");
 let pending = new Map<number, PendingUser>();
 let ignored = new Set<number>();
+type IgnoredUser = Omit<PendingUser, "requestedAt">;
+const ignoredProfilesPath = join(config.DATA_DIR, "ignored-profiles.json");
+let ignoredProfiles: Record<string, IgnoredUser> = {};
+if (existsSync(ignoredProfilesPath)) {
+  try {
+    ignoredProfiles = JSON.parse(readFileSync(ignoredProfilesPath, "utf8")) as Record<
+      string,
+      IgnoredUser
+    >;
+  } catch {
+    /* Keep ID-only records usable. */
+  }
+}
+function saveIgnoredProfiles(): void {
+  ensureDataDir();
+  writeFileSync(ignoredProfilesPath, JSON.stringify(ignoredProfiles), { mode: 0o600 });
+}
 
 function loadPending(): void {
   ensureDataDir();
@@ -115,7 +132,10 @@ export const pendingStore = {
 
   add(user: PendingUser): boolean {
     if (pending.has(user.telegramUserId)) return false;
-    if (ignored.has(user.telegramUserId)) return false;
+    if (ignored.has(user.telegramUserId)) {
+      pendingStore.setIgnoredProfile(user);
+      return false;
+    }
     pending.set(user.telegramUserId, user);
     savePending();
     log.info({ telegramUser: user.telegramUserId }, "pending link request added");
@@ -128,8 +148,10 @@ export const pendingStore = {
   },
 
   ignore(telegramUserId: number): void {
-    pending.delete(telegramUserId);
+    const user = pending.get(telegramUserId);
     ignored.add(telegramUserId);
+    if (user) pendingStore.setIgnoredProfile(user);
+    pending.delete(telegramUserId);
     savePending();
     saveIgnored();
     log.info({ telegramUser: telegramUserId }, "pending link request ignored");
@@ -137,8 +159,26 @@ export const pendingStore = {
 
   unignore(telegramUserId: number): void {
     ignored.delete(telegramUserId);
+    const { [String(telegramUserId)]: _removed, ...remaining } = ignoredProfiles;
+    ignoredProfiles = remaining;
+    saveIgnoredProfiles();
     saveIgnored();
     log.info({ telegramUser: telegramUserId }, "user unignored");
+  },
+
+  setIgnoredProfile(user: IgnoredUser): void {
+    if (!ignored.has(user.telegramUserId)) return;
+    ignoredProfiles[String(user.telegramUserId)] = {
+      telegramUserId: user.telegramUserId,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+    };
+    saveIgnoredProfiles();
+  },
+
+  getIgnoredUsers(): IgnoredUser[] {
+    return [...ignored].map((id) => ignoredProfiles[String(id)] ?? { telegramUserId: id });
   },
 
   getIgnored(): number[] {

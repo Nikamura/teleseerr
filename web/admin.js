@@ -143,18 +143,19 @@ export async function loadIgnoredUsers() {
   const section = document.getElementById("admin-ignored-section");
   const list = document.getElementById("admin-ignored-list");
   try {
-    const ids = await api("/api/admin/ignored");
-    if (ids.length === 0) {
+    const users = await api("/api/admin/ignored?details=1");
+    if (users.length === 0) {
       section.style.display = "none";
       return;
     }
     section.style.display = "";
-    list.innerHTML = ids.map((id) => `
+    list.innerHTML = users.map((user) => `
       <div class="admin-user-row">
         <div class="admin-user-info">
-          <span class="admin-user-tg">TG: ${id}</span>
+          <span class="admin-user-tg">${escHtml([user.firstName, user.lastName].filter(Boolean).join(" ") || "Unknown")}${user.username ? ` ${escHtml("@" + user.username)}` : ""}</span>
+          <span class="admin-user-seerr">ID: ${user.telegramUserId}</span>
         </div>
-        <button class="admin-unignore-btn" data-tg-id="${id}">Restore</button>
+        <button class="admin-unignore-btn" data-tg-id="${user.telegramUserId}">Restore</button>
       </div>`).join("");
 
     list.querySelectorAll(".admin-unignore-btn").forEach((btn) => {
