@@ -134,6 +134,8 @@ export function markReplacement(
       )
     )
       continue;
+    // Remember observed files so reopening a failed repair waits for another import.
+    r.fileIds = [...new Set([...r.fileIds, ...fileIds])];
     r.status = "replacement_available";
     r.updatedAt = new Date().toISOString();
     r.history.push({

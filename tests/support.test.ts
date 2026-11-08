@@ -53,6 +53,11 @@ test("report ownership, deduplication, explicit resolution and imported-file fol
   assert.equal(s.reports(42)[0]!.status, "replacement_available");
   s.updateReport(r.id, 42, false, "resolved", "");
   assert.equal(s.reports(42)[0]!.status, "resolved");
+  s.updateReport(r.id, 42, false, "open", "Still fails on the new file");
+  s.markReplacement(42, "tv", 1421, 6, ["sonarr:13"]);
+  assert.equal(s.reports(42)[0]!.status, "open");
+  s.markReplacement(42, "tv", 1421, 6, ["sonarr:14"]);
+  assert.equal(s.reports(42)[0]!.status, "replacement_available");
 });
 test("persistent action cooldowns survive repeated calls and corrupted stores fail closed", async () => {
   const s = await import("../src/support-store.js");
