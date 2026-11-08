@@ -39,7 +39,7 @@ a { color: var(--link); text-underline-offset: 3px; }
 .search-bar input { border: 0; background: none; border-radius: 0; min-width: 0; padding: 12px 0; font-size: 15px; color: var(--foreground); }
 .search-bar:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
 .search-bar input:focus-visible { outline: 0; }
-.browse-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin-top: 10px; border-bottom: 1px solid var(--border); }
+.browse-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin-top: 18px; border-bottom: 1px solid var(--border); }
 .browse-tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 4px; font-size: 14px; font-weight: 500; min-height: 44px; }
 .browse-tab.active { background: none; color: var(--foreground); border-bottom-color: var(--primary); font-weight: 700; }
 .primary-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 30; width: min(100%,480px); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--background); border-top: 1px solid var(--border); display: flex; gap: 0; overflow: visible; }
@@ -74,6 +74,12 @@ body[data-screen="detail"] .search-bar { display: none; }
 .badge-requested { background: #3d321f; color: #f3d39b; border-color: #705a34; }
 .badge-downloading, .badge-approved { background: #2d2b23; color: #f4d295; border-color: #705a34; }
 .badge-declined { color: #efb3ad; background: #3a2523; border-color: #74504c; }
+/* Browse controls form separate rows with the same gutter as the posters. */
+:is(#movies-view, #tv-view, #anime-view) { padding-top: 24px; }
+.filter-bar { gap: 10px; padding: 0 20px; margin-bottom: 18px; }
+.filter-btn { min-height: 44px; padding: 8px 14px; gap: 6px; font-size: 13px; }
+.genre-chips { gap: 10px; padding: 0 20px; margin-bottom: 24px; }
+:is(#movies-view, #tv-view, #anime-view) .media-grid { padding-top: 0; column-gap: 16px; row-gap: 24px; }
 .media-grid { padding: 18px 20px; gap: 18px 12px; grid-template-columns: repeat(3,minmax(0,1fr)); }
 .media-card { padding: 0; border: 0; background: var(--card); color: var(--foreground); text-align: left; font: inherit; }
 .card-title { font-size: 12px; }
@@ -190,6 +196,7 @@ body[data-screen="detail"] .search-bar { display: none; }
 @media (max-width: 359px) {
   .top-bar, .browse-header, #admin-view, #requests-view, #profile-view { padding-left: 14px; padding-right: 14px; }
   .discovery-intro h1 { font-size: 24px; }
+  .filter-bar, .genre-chips, :is(#movies-view, #tv-view, #anime-view) .media-grid { padding-left: 14px; padding-right: 14px; }
   .search-bar input { font-size: 13px; }
   .spotlight-host { margin-left: 14px; margin-right: 14px; }
   .spotlight { height: 230px; }

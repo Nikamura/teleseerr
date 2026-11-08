@@ -75,3 +75,8 @@ counts anonymous visitors/sessions, not identified Telegram accounts.
 Headless browser fixtures exercised routing, Back/Forward, deep reload, profile,
 People, search history privacy, person fallback and desktop/mobile layout. Captures
 are under `.design/navigation`; these do not represent a native Telegram test.
+
+Browse spacing: search and category tabs have an 18px separation. Category pages
+leave 24px before the sort/filter row, 18px before genres and 24px before posters.
+All four rows share a 20px horizontal gutter, reduced to 14px below 360px. Filter
+controls retain 44px targets; genre/sort rows scroll horizontally on narrow screens.
