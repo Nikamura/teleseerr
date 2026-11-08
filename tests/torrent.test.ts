@@ -81,3 +81,28 @@ test("unmapped or malformed hashes do not mutate a torrent client", async () => 
   await assert.rejects(() => torrentClient(instance, { ...item, downloadId: "not-a-hash" }));
   assert.equal(calls, 0);
 });
+
+test("redacted Arr passwords never trigger a bad login attempt", async () => {
+  const { torrentClient } = await import("../src/arr/torrent.js");
+  let logins = 0;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("/auth/login")) logins++;
+    return new Response(
+      JSON.stringify([
+        {
+          id: 3,
+          enable: true,
+          implementation: "QBittorrent",
+          fields: [
+            { name: "host", value: "torrent.invalid" },
+            { name: "port", value: 443 },
+            { name: "useSsl", value: true },
+            { name: "password", value: "********" },
+          ],
+        },
+      ]),
+    );
+  };
+  await assert.rejects(() => torrentClient(instance, item), /redacted/);
+  assert.equal(logins, 0);
+});

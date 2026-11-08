@@ -267,6 +267,12 @@ revision and custom-format score are verified not to regress. All unrelated
 rejections and downloadAllowed=false remain blocking. Release labels advertise
 languages; the explicit English filter is not a guarantee of imported audio.
 
+Arr often redacts its stored client password. Set TELESEERR_QBITTORRENT_URL,
+TELESEERR_QBITTORRENT_USERNAME and TELESEERR_QBITTORRENT_PASSWORD server-side.
+The URL must exactly match the mapped Arr client before these credentials are used.
+Connect Teleseerr to that client's authenticated Docker network (vpn_clients in
+this installation), rather than a network with an authentication bypass.
+
 qBittorrent is mapped through the configured Arr download client, never through
 a user-supplied URL. Diagnostics show speed, peers and last activity when available.
 Watch sooner moves just that shared hash to the top, requires queueing enabled,

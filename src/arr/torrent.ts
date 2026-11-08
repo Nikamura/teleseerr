@@ -45,18 +45,15 @@ export async function torrentClient(
     "torrent client",
     config.ALLOW_INSECURE_HTTP,
   );
-  const login = await fetch(`${base}/api/v2/auth/login`, {
-    method: "POST",
-    body: new URLSearchParams({
-      username: fieldText("username"),
-      password: fieldText("password"),
-    }),
-    redirect: "error",
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!login.ok || (await login.text()).trim() !== "Ok.")
-    throw new ClientError(502, "Torrent client login unavailable");
-  const cookie = login.headers.get("set-cookie")?.split(";")[0] ?? "";
+  const override = config.QBITTORRENT_URL === base && !!config.QBITTORRENT_PASSWORD;
+  const username = override ? config.QBITTORRENT_USERNAME : fieldText("username");
+  const password = override ? config.QBITTORRENT_PASSWORD : fieldText("password");
+  if (!password || /^[*•]+$/.test(password))
+    throw new ClientError(
+      502,
+      "Torrent credentials are redacted by the download service. Ask the administrator to configure the torrent integration.",
+    );
+  const cookie = await loginCookie(base, username, password);
   const call = async (path: string, body?: URLSearchParams): Promise<Response> => {
     const response = await fetch(`${base}/api/v2/${path}`, {
       method: body ? "POST" : "GET",
@@ -65,7 +62,10 @@ export async function torrentClient(
       redirect: "error",
       signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok) throw new ClientError(502, "Torrent client action could not be confirmed");
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) sessions.delete(base);
+      throw new ClientError(502, "Torrent client action could not be confirmed");
+    }
     return response;
   };
   const infos = (await (
@@ -97,4 +97,29 @@ export async function torrentClient(
         );
     },
   };
+}
+
+const sessions = new Map<string, { at: number; cookie: Promise<string> }>();
+async function loginCookie(base: string, username: string, password: string): Promise<string> {
+  const current = sessions.get(base);
+  if (current && Date.now() - current.at < 120000) return current.cookie;
+  const cookie = (async () => {
+    const response = await fetch(`${base}/api/v2/auth/login`, {
+      method: "POST",
+      body: new URLSearchParams({ username, password }),
+      headers: { Referer: `${base}/` },
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok || (await response.text()).trim() !== "Ok.")
+      throw new ClientError(502, "Torrent client login unavailable");
+    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+  })();
+  sessions.set(base, { at: Date.now(), cookie });
+  try {
+    return await cookie;
+  } catch (error) {
+    sessions.delete(base);
+    throw error;
+  }
 }
