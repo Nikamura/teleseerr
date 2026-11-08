@@ -1,3 +1,4 @@
+import { wakeReportNotifications } from "../support-notifications.js";
 import { playbackStatus } from "../arr/playback.js";
 import { cleanupStatus } from "../arr/cleanup.js";
 import { config } from "../config.js";
@@ -239,6 +240,7 @@ export async function handleReports({ auth, res, req }: RouteContext): Promise<v
         text(b["message"], 1000),
       ),
     );
+    wakeReportNotifications();
     return;
   }
   const type = b["type"];
@@ -249,6 +251,9 @@ export async function handleReports({ auth, res, req }: RouteContext): Promise<v
   const episodeId = b["episodeId"] ? positive(b["episodeId"]) : undefined;
   const instance = text(b["instance"], 40) || undefined;
   const snapshot = await diagnosis(type, tmdbId, episodeId, instance);
+  const episode = episodeId
+    ? snapshot.libraries.flatMap((l) => l.episodes).find((e) => e.id === episodeId)
+    : undefined;
   const details = await (
     type === "tv" ? seerr.getTvDetails(tmdbId) : seerr.getMovieDetails(tmdbId)
   ).catch(() => null);
@@ -260,6 +265,7 @@ export async function handleReports({ auth, res, req }: RouteContext): Promise<v
       type,
       tmdbId,
       ...(episodeId ? { episodeId } : {}),
+      ...(episode ? { season: episode.season, episode: episode.episode } : {}),
       ...(instance ? { instance } : {}),
       category: String(b["category"]),
       title: title ?? `TMDB ${tmdbId}`,
@@ -278,6 +284,7 @@ export async function handleReports({ auth, res, req }: RouteContext): Promise<v
     }),
     201,
   );
+  wakeReportNotifications();
 }
 export async function handlePreferences({ auth, req, res }: RouteContext): Promise<void> {
   if (req.method === "GET") {

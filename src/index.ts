@@ -1,3 +1,4 @@
+import { startReportNotifications } from "./support-notifications.js";
 import { startSupportWatch } from "./support-watch.js";
 import { Bot, GrammyError, HttpError, InlineKeyboard } from "grammy";
 import { config } from "./config.js";
@@ -98,6 +99,7 @@ async function main() {
   startRetries(bot);
   startServer(bot);
   startSupportWatch();
+  startReportNotifications();
 
   log.info({ botUsername: (await bot.api.getMe()).username }, "Bot started");
   void bot.start();

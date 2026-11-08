@@ -248,6 +248,20 @@ report download, playback, wrong-episode, audio, subtitle and other issues.
 Reports include device, notes, file identity and a sanitized diagnostic snapshot;
 only their owner and the configured administrator can read them. Requests →
 Problems shows the user's reports; People → Reported problems is the admin queue.
+
+New problem reports also notify `TELESEERR_ADMIN_USER_ID` privately through the
+existing Telegram bot. Messages include the title, episode when known, linked
+reporter, device/app, category and notes, plus title and Requests links. User
+reopens, resolution confirmations and notes notify the admin; the admin's own
+status updates do not echo back. No additional setting is needed. Reports and
+notification events are saved together in `support.json`; Telegram failure never
+loses the report. Pending alerts survive restarts and retry with backoff from
+30 seconds up to one hour. Duplicate open-report submissions and unchanged status
+updates do not create another alert. Delivery is at least once: a crash after
+Telegram accepts a message but before local acknowledgement can repeat it.
+On first upgrade, existing unresolved reports are forwarded once; resolved
+history is not replayed. This notifies the admin only, not other users.
+
 Admins can investigate and post updates. Reports remain open until explicitly
 resolved. A periodic two-minute checker notices newly imported file identities
 and labels them **replacement available**, asking the user to test playback.

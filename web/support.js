@@ -162,7 +162,7 @@ export async function openSupport(target) {
         const r = await apiPost("/api/support/reports", { ...target, ...fields });
         if (r.error) throw new Error(r.error);
         content.querySelector("#report-result").textContent =
-          "Report saved. Track it in Requests → Problems. It stays open until playback works.";
+          "Report saved and queued for the admin on Telegram. Track it in Requests → Problems.";
       } catch (e) {
         content.querySelector("#report-result").textContent = e.message;
       } finally {

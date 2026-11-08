@@ -20,6 +20,7 @@ export type Report = {
   instance?: string;
   episodeId?: number;
   season?: number;
+  episode?: number;
   category: string;
   title?: string;
   snapshot?: {
@@ -34,14 +35,40 @@ export type Report = {
   fileIds: string[];
   history: { at: string; message: string; actor: number }[];
 };
+export type ReportNotice = {
+  id: string;
+  report: Pick<
+    Report,
+    | "id"
+    | "owner"
+    | "type"
+    | "tmdbId"
+    | "title"
+    | "season"
+    | "episode"
+    | "episodeId"
+    | "category"
+    | "device"
+    | "notes"
+    | "status"
+  >;
+  event: "created" | "existing" | "updated" | "reopened" | "resolved";
+  actor: number;
+  message: string;
+  at: string;
+  attempts: number;
+  nextAttemptAt: number;
+};
 type Data = {
   reports: Report[];
+  reportNotifications?: ReportNotice[];
   preferences: Record<string, { audio: string; subtitles: string }>;
   cooldowns: Record<string, number>;
 };
 function read(): Data {
   const path = join(config.DATA_DIR, "support.json");
-  if (!existsSync(path)) return { reports: [], preferences: {}, cooldowns: {} };
+  if (!existsSync(path))
+    return { reports: [], reportNotifications: [], preferences: {}, cooldowns: {} };
   const data = JSON.parse(readFileSync(path, "utf8")) as Partial<Data>;
   if (!Array.isArray(data.reports) || !data.preferences || !data.cooldowns)
     throw new Error("Invalid support store");
@@ -52,6 +79,77 @@ function write(data: Data): void {
   const path = join(config.DATA_DIR, "support.json");
   writeFileSync(`${path}.tmp`, JSON.stringify(data), { mode: 0o600 });
   renameSync(`${path}.tmp`, path);
+}
+function notice(
+  report: Report,
+  event: ReportNotice["event"],
+  actor: number,
+  message = "",
+): ReportNotice {
+  const {
+    id,
+    owner,
+    type,
+    tmdbId,
+    title,
+    season,
+    episode,
+    episodeId,
+    category,
+    device,
+    notes,
+    status,
+  } = report;
+  return {
+    id: randomUUID(),
+    report: {
+      id,
+      owner,
+      type,
+      tmdbId,
+      ...(title ? { title } : {}),
+      ...(season !== undefined ? { season } : {}),
+      ...(episode !== undefined ? { episode } : {}),
+      ...(episodeId ? { episodeId } : {}),
+      category,
+      device,
+      notes,
+      status,
+    },
+    event,
+    actor,
+    message,
+    at: new Date().toISOString(),
+    attempts: 0,
+    nextAttemptAt: 0,
+  };
+}
+function notificationQueue(data: Data): ReportNotice[] {
+  // One-time migration forwards existing unresolved reports, never resolved history.
+  data.reportNotifications ??= data.reports
+    .filter((r) => r.status !== "resolved")
+    .map((r) => notice(r, "existing", r.owner));
+  return data.reportNotifications;
+}
+export function pendingReportNotifications(now = Date.now()): ReportNotice[] {
+  const data = read();
+  const needsMigration = !data.reportNotifications;
+  const queue = notificationQueue(data);
+  if (needsMigration) write(data);
+  return queue.filter((n) => n.nextAttemptAt <= now).slice(0, 10);
+}
+export function completeReportNotification(id: string): void {
+  const data = read();
+  data.reportNotifications = notificationQueue(data).filter((n) => n.id !== id);
+  write(data);
+}
+export function retryReportNotification(id: string): void {
+  const data = read();
+  const item = notificationQueue(data).find((n) => n.id === id);
+  if (!item) return;
+  item.attempts++;
+  item.nextAttemptAt = Date.now() + Math.min(3600, 30 * 2 ** Math.min(item.attempts - 1, 7)) * 1000;
+  write(data);
 }
 export function reports(owner: number, admin = false): Report[] {
   return read()
@@ -83,6 +181,7 @@ export function createReport(
     updatedAt: now,
     history: [{ at: now, actor: input.owner, message: "Report opened" }],
   };
+  notificationQueue(data).push(notice(report, "created", input.owner));
   data.reports.push(report);
   write(data);
   return report;
@@ -99,6 +198,9 @@ export function updateReport(
   if (!report) throw new ClientError(404, "Report not found");
   if (!admin && status !== "resolved" && status !== "open")
     throw new ClientError(403, "Only the admin can change investigation status");
+  if (report.status === status && !message) return report;
+  const notifications = notificationQueue(data);
+  const previousStatus = report.status;
   report.status = status;
   report.updatedAt = new Date().toISOString();
   report.history.push({
@@ -109,6 +211,19 @@ export function updateReport(
       (status === "resolved" ? "Playback confirmed working" : status.replaceAll("_", " ")),
   });
   report.history = report.history.slice(-50);
+  if (actor !== config.ADMIN_USER_ID)
+    notifications.push(
+      notice(
+        report,
+        previousStatus !== status && (status === "open" || status === "resolved")
+          ? status === "open"
+            ? "reopened"
+            : "resolved"
+          : "updated",
+        actor,
+        message,
+      ),
+    );
   write(data);
   return report;
 }
