@@ -322,19 +322,6 @@ Optional integrations (server-side configuration only):
   the linked Seerr plexId and this title's ratingKey. Other users' sessions, paths,
   tokens and server identifiers are never returned. File tracks come from Arr's
   imported-file scanner, separate from advertised release languages.
-- TELESEERR_STATUS_URL: independently hosted HTTPS status page. The included
-  Independent status GitHub workflow publishes to GitHub Pages after enabling
-  workflow-based Pages and setting TELESEERR_PUBLIC_URL to the public health URL.
-  Optional SEERR_PUBLIC_URL/PLEX_PUBLIC_URL repository variables can add public
-  probes. Never put credentials in these URLs. The page checks the app's public
-  `/health` endpoint from the visitor's browser on load, on visibility return,
-  every minute while visible, and with **Check again**. This endpoint permits
-  credential-free cross-origin reads; authenticated APIs retain their own rules.
-  Browser failures indicate a connection problem, not a confirmed global outage.
-  Independent observations run after status-page changes, successful image builds,
-  manually, and approximately every 15 minutes off the hour. GitHub may delay
-  schedules; observations older than 45 minutes are labelled delayed separately
-  from the live result. Reachability does not test playback.
 
 Diagnostics and reports redact private Arr messages into actionable categories.
 Unavailable adapters are explicitly labelled. Subtitle issues offer verified

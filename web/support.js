@@ -248,10 +248,10 @@ export async function openServiceStatus() {
   content.textContent = "Checking…";
   try {
     const d = await api("/api/support/status");
-    content.innerHTML = `<p>${escHtml(d.scope)}</p>${d.services.map((s) => `<p>${s.available ? "✓" : "⚠"} ${escHtml(s.name)} · ${s.available ? "Reachable" : "Unavailable"}</p>`).join("")}<p class="support-muted">Checked ${escHtml(new Date(d.checkedAt).toLocaleString())}</p>${d.externalStatusUrl ? `<a href="${escHtml(d.externalStatusUrl)}" target="_blank" rel="noopener noreferrer">Independent status page ↗</a>` : ""}`;
+    content.innerHTML = `<p>${escHtml(d.scope)}</p>${d.services.map((s) => `<p>${s.available ? "✓" : "⚠"} ${escHtml(s.name)} · ${s.available ? "Reachable" : "Unavailable"}</p>`).join("")}<p class="support-muted">Checked ${escHtml(new Date(d.checkedAt).toLocaleString())}</p>`;
   } catch {
     content.textContent =
-      "Teleseerr cannot reach the status service. Check the independent status page or contact the administrator.";
+      "Service checks are temporarily unavailable. Try again later or contact the administrator.";
   }
 }
 /** @param {any} item @returns {Promise<void>} */

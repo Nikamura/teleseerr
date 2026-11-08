@@ -237,12 +237,9 @@ export function startServer(bot: Bot): void {
     try {
       // Health check
       if (path === "/health") {
-        // Public, credential-free reachability only; lets the independent status page
-        // check from the visitor's browser when scheduled observations are delayed.
         res.writeHead(200, {
           "Content-Type": "application/json",
           "Cache-Control": "no-store",
-          "Access-Control-Allow-Origin": "*",
         });
         res.end(JSON.stringify({ status: "ok", frontendVersion: FRONTEND_VERSION }));
         return;

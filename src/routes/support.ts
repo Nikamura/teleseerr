@@ -463,7 +463,6 @@ export async function handleServiceStatus({ res }: RouteContext): Promise<void> 
   json(res, {
     checkedAt: new Date().toISOString(),
     services: [{ name: "Requests", available: seerrAvailable }, ...services],
-    externalStatusUrl: config.STATUS_URL.startsWith("https://") ? config.STATUS_URL : null,
     scope: "Server reachability. This does not test playback on your device.",
   });
 }
