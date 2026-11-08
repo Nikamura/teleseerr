@@ -1,3 +1,4 @@
+import { startSupportWatch } from "./support-watch.js";
 import { Bot, GrammyError, HttpError, InlineKeyboard } from "grammy";
 import { config } from "./config.js";
 import { log } from "./logger.js";
@@ -96,6 +97,7 @@ async function main() {
   // Start Mini App server + webhook endpoint (if configured)
   startRetries(bot);
   startServer(bot);
+  startSupportWatch();
 
   log.info({ botUsername: (await bot.api.getMe()).username }, "Bot started");
   void bot.start();

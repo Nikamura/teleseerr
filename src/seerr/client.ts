@@ -16,7 +16,7 @@ import type {
 
 const BASE = `${config.SEERR_URL}/api/v1`;
 
-async function seerrFetch(path: string, init?: RequestInit): Promise<Response> {
+export async function seerrFetch(path: string, init?: RequestInit): Promise<Response> {
   const url = `${BASE}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -118,11 +118,18 @@ export type RequestDetails = {
   is4k: boolean;
   type: string;
   serverId?: number;
+  profileId?: number;
+  rootFolder?: string;
+  languageProfileId?: number;
+  tags?: number[];
   media?: { tmdbId: number; status?: number; status4k?: number };
 };
 
-export async function retryRequest(requestId: number): Promise<void> {
-  const res = await seerrFetch(`/request/${requestId}/retry`, { method: "POST" });
+export async function retryRequest(requestId: number, userId?: number): Promise<void> {
+  const res = await seerrFetch(`/request/${requestId}/retry`, {
+    method: "POST",
+    ...(userId ? { headers: { "X-Api-User": String(userId) } } : {}),
+  });
   await res.body?.cancel();
   if (!res.ok) throw new Error(`Seerr retry failed: ${res.status}`);
 }

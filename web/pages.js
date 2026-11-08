@@ -1,6 +1,7 @@
+import { openReports, openServiceStatus, editPendingRequest } from "./support.js";
 import { icon } from "./icons.js";
 import {
-  tg, isTelegramWebApp, api,
+  tg, isTelegramWebApp, api, apiPost,
   posterUrl, escHtml, formatDate,
   requestStatusText, requestStatusClass,
   showLoading, hideLoading, toast,
@@ -18,15 +19,20 @@ import { openDetail, removeRequestBar } from "./detail.js";
 export async function loadRequests(view) {
   view.innerHTML = '<div class="request-list-loading"><div class="spinner" style="width:24px;height:24px;margin:40px auto"></div></div>';
 
+    const help = document.createElement("div"); help.className="help-entry"; help.innerHTML='<button class="quick-btn secondary" id="my-problems">Problems</button><button class="quick-btn secondary" id="my-service-status">Service status</button>';
+    help.querySelector("#my-problems").addEventListener("click",openReports);
+    help.querySelector("#my-service-status").addEventListener("click",openServiceStatus);
+    view.appendChild(help);
   try {
     const data = await api("/api/requests?page=1");
 
     if (data.results.length === 0) {
       view.innerHTML = '<div class="empty">Your next movie night starts here. Find a title in Discover to make your first request.</div>';
-      return;
+      view.appendChild(help); return;
     }
 
     view.innerHTML = '<div class="page-heading"><p class="section-kicker">Your watch queue</p><h1>Requests</h1><p>From “I need to see this” to ready to watch.</p></div>';
+    view.appendChild(help);
     renderRequestList(data.results, view);
 
     if (data.pageInfo.pages > 1) {
@@ -39,7 +45,8 @@ export async function loadRequests(view) {
       });
     }
   } catch {
-    view.innerHTML = '<div class="empty">Failed to load requests</div>';
+    view.innerHTML = '<div class="empty">Requests are temporarily unavailable. Reports and service status are still available below.</div>';
+    view.appendChild(help);
   }
 }
 
@@ -80,6 +87,19 @@ export function renderRequestList(items, container, append = false) {
         </div>
       </div>`;
 
+    if (item.status === 1 || item.status === 4) {
+      const controls = document.createElement("div"); controls.className="request-management";
+      controls.innerHTML = item.status === 1 ? `<button class="quick-btn secondary" data-change="cancel">Cancel pending request</button>${item.mediaType === "tv" ? '<button class="quick-btn secondary" data-change="edit">Edit seasons</button>' : ""}` : '<button class="quick-btn secondary" data-change="retry">Retry failed request</button>';
+      controls.addEventListener("click", e => e.stopPropagation());
+      controls.querySelectorAll("button").forEach(button => button.addEventListener("click", async () => {
+        const action = button.dataset.change;
+        if (action === "edit") { void editPendingRequest(item); return; }
+        if (!confirm(action === "cancel" ? "Cancel your pending request? Shared approved downloads will not be removed." : "Retry submitting this failed request to the download service?")) return;
+        button.disabled=true;
+        try { const r=await apiPost("/api/requests/change",{id:item.id,action,confirmed:true});toast(r.error||r.message);if(!r.error)void loadRequests(document.getElementById("requests-view")); } catch {toast("Request change could not be confirmed. Refresh first.");} finally {button.disabled=false;}
+      }));
+      el.querySelector(".request-info").append(controls);
+    }
     list.appendChild(el);
   }
 }

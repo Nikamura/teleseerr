@@ -196,6 +196,7 @@ export type Genre = { id: number; name: string };
 export type Keyword = { id: number; name: string };
 
 export type SeerrUser = {
+  plexId?: number | string;
   id: number;
   email: string;
   username: string;
@@ -212,6 +213,7 @@ export type UserQuota = {
 };
 
 export type SeerrRequest = {
+  seasons?: { seasonNumber: number }[];
   id: number;
   status: RequestStatus;
   media: {

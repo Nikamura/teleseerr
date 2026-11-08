@@ -67,6 +67,11 @@ export const config = {
   RETRY_DELAYS_SECONDS: retryDelays(),
   ANIME_SONARR_ID: optional("TELESEERR_ANIME_SONARR_ID", ""),
 
+  PLEX_URL: optionalServiceUrl("TELESEERR_PLEX_URL"),
+  PLEX_TOKEN: optional("TELESEERR_PLEX_TOKEN", ""),
+  MAINTAINERR_URL: optionalServiceUrl("TELESEERR_MAINTAINERR_URL"),
+  STATUS_URL: optional("TELESEERR_STATUS_URL", ""),
+
   // Sonarr/Radarr direct API (optional — for download progress)
   RADARR_URL: optionalServiceUrl("TELESEERR_RADARR_URL"),
   RADARR_API_KEY: optional("TELESEERR_RADARR_API_KEY", ""),

@@ -28,6 +28,9 @@ and adds controls for when a download needs help.
   for all missing episodes in a season—even if they stopped being monitored.
 - **Choose another release.** Compare quality, size, language and reported seeders
   when a transfer gets stuck. Ineligible choices explain why they’re blocked.
+- **Solve playback problems.** **Having trouble?** shows file languages, download health, your active Plex playback, and cleanup dates. Send a report and track it until it works.
+- **Replace a bad copy.** Choose a different episode, movie, or complete-season release while the current files stay available during downloading.
+- **Change your mind.** Edit or cancel your own pending requests, request the latest unrequested season, or retry a failed request.
 - **Let trusted users help themselves.** An admin can grant download-management
   access without handing out Sonarr or Radarr access.
 
@@ -36,7 +39,7 @@ browsing, requesting and download recovery in the same Telegram app.
 
 ## Missing episode? Stuck download?
 
-Open the show’s **Episodes** section. Choose **Download episode** for one missing
+Open the show’s **Seasons & episodes** section. Choose **Download episode** for one missing
 episode, **Download missing episodes** for the season, or **Find alternatives**
 for an existing transfer.
 
@@ -51,6 +54,12 @@ an admin’s **Manage downloads** permission and configured Sonarr/Radarr servic
 Episode recovery works for shows already in Sonarr. It searches only the selected
 missing aired episodes; normal automatic cleanup still applies. A search starts
 the process—**Available** means the episode has reached the library.
+
+## Won’t play? Wrong audio?
+
+Open a title or episode and tap **Having trouble?**. Check the file’s tracks and download state, find another release, or send a report with your device and error. Find your reports under **Requests → Problems**; tap **Works now** after testing playback.
+
+Download changes need **Manage downloads**, granted by your admin in **People**. Reports and pending-request changes are available to linked users. Optional integrations provide cleanup and Plex details; unavailable services are labelled clearly.
 
 ## Get started
 

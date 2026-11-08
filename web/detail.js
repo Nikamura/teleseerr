@@ -1,3 +1,4 @@
+import { openSupport, openServiceStatus } from "./support.js";
 import { icon } from "./icons.js";
 import { mountDownloads } from "./downloads.js";
 import {
@@ -245,7 +246,7 @@ export function renderDetail(type, d) {
     <div class="detail-meta">${meta.join("")}</div>
     ${genreTags}
     <div class="detail-status">${statusIcon(status)} ${statusText(status)}</div>
-    <div id="download-progress-container"></div><div id="download-management" class="download-management"></div>
+    <div class="help-entry"><button class="quick-btn secondary" id="title-help">Having trouble?</button><button class="quick-btn secondary" id="service-status">Service status</button></div><div id="download-progress-container"></div><div id="download-management" class="download-management"></div>
     ${providersHtml}
     ${links}
     ${overview ? `<div class="detail-overview">${escHtml(overview)}</div>` : ""}
@@ -284,6 +285,8 @@ export function renderDetail(type, d) {
     updateTvRequestBar(d);
   }
 
+  document.getElementById("title-help").onclick = () => openSupport({type,tmdbId:d.id});
+  document.getElementById("service-status").onclick = openServiceStatus;
   mountDownloads(type, d.id, type === "tv" ? {
     show: d,
     seasonState: getSeasonState,
@@ -422,6 +425,7 @@ export function renderSeasonControls(show) {
 
   const requestable = seasons.filter((s) => s.seasonNumber !== 0 && getSeasonState(show, s) === "requestable");
   if (requestable.length > 0) {
+    html += '<button class="quick-btn secondary" id="select-latest">Latest unrequested season</button>';
     html += '<button class="quick-btn secondary" id="select-all">Select unrequested seasons</button>';
 
     const future = requestable.filter((s) =>
@@ -484,6 +488,8 @@ export function attachSeasonHandlers(show, view) {
       sync();
     };
   });
+  const latest = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-latest"));
+  if (latest) latest.onclick = () => { selected.clear(); const season = Math.max(...selectable); if (Number.isFinite(season)) selected.add(season); sync(); };
   const all = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-all"));
   if (all) all.onclick = () => { selectable.forEach(season => selected.add(season)); sync(); };
   const upcoming = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-new"));
@@ -523,6 +529,8 @@ export function updateTvRequestBar(show) {
 
   const was4k = /** @type {HTMLInputElement | null} */ (document.getElementById("request-4k-cb"))?.checked ?? false;
   showRequestBar(`Request ${label}`, async () => {
+    const count = (show.seasons ?? []).filter(s => sorted.includes(s.seasonNumber)).reduce((n,s) => n + (s.episodeCount ?? 0),0);
+    if (!confirm(`Request ${sorted.length} season${sorted.length === 1 ? "" : "s"}: ${label} (${count} episodes)? Already available episodes are retained. This is a shared library request.`)) return;
     showLoading();
     const result = await apiPost("/api/request", {
       mediaType: "tv",

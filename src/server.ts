@@ -1,4 +1,12 @@
 import {
+  handleDiagnosis,
+  handleReports,
+  handlePreferences,
+  handleSupportAction,
+  handleRequestChange,
+  handleServiceStatus,
+} from "./routes/support.js";
+import {
   canManageDownloads,
   handleDownloads,
   handleReleaseSearch,
@@ -103,6 +111,14 @@ async function handleMe(res: ServerResponse, auth: ValidAuth): Promise<void> {
 // ── Route Table ───────────────────────────────────
 
 const routes: Route[] = [
+  { method: "GET", pattern: "/api/:type/:id/support", handler: handleDiagnosis },
+  { method: "GET", pattern: "/api/support/reports", handler: handleReports },
+  { method: "POST", pattern: "/api/support/reports", handler: handleReports },
+  { method: "GET", pattern: "/api/support/preferences", handler: handlePreferences },
+  { method: "POST", pattern: "/api/support/preferences", handler: handlePreferences },
+  { method: "POST", pattern: "/api/support/action", handler: handleSupportAction },
+  { method: "POST", pattern: "/api/requests/change", handler: handleRequestChange },
+  { method: "GET", pattern: "/api/support/status", handler: handleServiceStatus },
   { method: "GET", pattern: "/api/:type/:id/downloads", handler: handleDownloads },
   { method: "POST", pattern: "/api/downloads/recover-season", handler: handleSeasonRecovery },
   { method: "POST", pattern: "/api/downloads/search", handler: handleReleaseSearch },

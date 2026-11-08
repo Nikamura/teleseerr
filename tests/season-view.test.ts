@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 const source = readFileSync("web/downloads.js", "utf8")
   .split("/** @param {string} type")[0]!
-  .replace(/^import .*\n/, "");
+  .replace(/^import .*\n/gm, "");
 const show = {
   seasons: [1, 2, 3, 4].map((seasonNumber) => ({ seasonNumber, episodeCount: 24 })),
   mediaInfo: {

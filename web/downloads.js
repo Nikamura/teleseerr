@@ -1,3 +1,4 @@
+import { openSupport } from "./support.js";
 import { api, apiPost, escHtml } from "./state.js";
 
 const episodeLabels = {
@@ -49,11 +50,11 @@ function renderEpisodes(data, tmdbId, options = {}) {
       const search = library.searches?.find(s => s.season === season);
       const searching = search && ["queued", "started"].includes(search.status);
       const recovery = `<div class="season-recovery">${!data.canManage && missing.length ? '<p class="episode-intent">Episode downloads need download-management access from your admin.</p>' : ""}${missing.length ? `<p>${missing.length} missing${unmonitored ? ` · ${unmonitored} not monitored` : ""}</p>` : ""}${searching ? '<p role="status">Searching for requested episodes…</p>' : search?.status === "failed" ? '<p>Search failed. Refresh or try again.</p>' : search?.status === "completed" && missing.length ? '<p>Search finished. Some episodes still need a suitable release.</p>' : ""}${data.canManage && missing.length && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-count="${missing.length}" data-instance="${escHtml(library.instance)}">Download missing episodes</button>` : ""}<p class="recovery-result" role="status"></p></div>`;
-      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span class="season-statuses"><span class="season-status ${request.active ? "season-status-downloading" : "season-status-available"}">${request.label}</span>${badges}</span></summary><div class="season-actions">${requestAction}${episodeNote}</div>${recovery}<div class="episode-list">` + group.map(ep => {
+      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span class="season-statuses"><span class="season-status ${request.active ? "season-status-downloading" : "season-status-available"}">${request.label}</span>${badges}</span></summary><div class="season-actions">${requestAction}${episodeNote}${complete && data.canManage && group.length > 1 ? `<button class="quick-btn secondary" data-replace-season="${season}" data-instance="${escHtml(library.instance)}">Replace season files</button><div class="release-options" aria-live="polite"></div>` : ""}</div>${recovery}<div class="episode-list">` + group.map(ep => {
         const label = episodeLabels[ep.state] ?? "Status unknown";
         const intent = ep.state === "missing" ? (request.active ? request.label : ep.monitored ? "Monitored for downloads" : "Not monitored for downloads") : "";
         const date = ep.airDate ? new Date(ep.airDate).toLocaleDateString(undefined, {year:"numeric",month:"short",day:"numeric"}) : "";
-        return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${intent ? `<p class="episode-intent">${intent}</p>` : ""}${data.canManage && ep.state === "missing" && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-recover-episode="${ep.id}" data-episode-label="S${String(season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}" data-count="1" data-instance="${escHtml(library.instance)}">Download episode</button><p class="recovery-result" role="status"></p>` : ""}${ep.canReplaceFile ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-replace-file="true">Replace episode</button>` : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<div class="release-options" aria-live="polite"></div></div>`;
+        return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${intent ? `<p class="episode-intent">${intent}</p>` : ""}${data.canManage && ep.state === "missing" && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-recover-episode="${ep.id}" data-episode-label="S${String(season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}" data-count="1" data-instance="${escHtml(library.instance)}">Download episode</button><p class="recovery-result" role="status"></p>` : ""}${ep.canReplaceFile ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-replace-file="true">Replace episode</button>` : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<button class="quick-btn secondary" data-help-episode="${ep.id}" data-instance="${escHtml(library.instance)}">Having trouble?</button><div class="release-options" aria-live="polite"></div></div>`;
       }).join("") + '</div></details>';
     }).join("");
   }).join("");
@@ -89,6 +90,7 @@ export function mountDownloads(type, id, options = {}) {
       if (type === "tv") {
         results.innerHTML = (options.renderControls?.(options.show) ?? "") + renderEpisodes(data, id, options);
         options.onRender?.(host);
+        results.querySelectorAll("[data-help-episode]").forEach(el => el.addEventListener("click", () => { const d = /** @type {HTMLElement} */ (el).dataset; void openSupport({type:"tv",tmdbId:id,episodeId:Number(d.helpEpisode),instance:d.instance}); }));
         results.querySelectorAll("details").forEach(el => {
           if (expanded.includes(`${el.getAttribute("data-library")}:${el.getAttribute("data-season")}`)) el.setAttribute("open", "");
         });
@@ -118,6 +120,7 @@ export function mountDownloads(type, id, options = {}) {
         if (data.libraries?.some(l => l.searches?.some(s => ["queued", "started"].includes(s.status)) || l.episodes.some(e => ["downloading", "queued", "paused", "importing", "attention", "failed"].includes(e.state)))) timer = setTimeout(() => {
                 if (!results.querySelector(".release-options:not(:empty)")) void refresh();
               }, 8000);
+        results.querySelectorAll("[data-replace-season]").forEach(el => el.addEventListener("click", () => { const b=/** @type {HTMLButtonElement} */(el); const library=data.libraries.find(l=>l.instance===b.dataset.instance); void findAlternatives({instance:b.dataset.instance,tmdbId:id,replaceExisting:true,episodeIds:library.episodes.filter(e=>e.season===Number(b.dataset.replaceSeason)).map(e=>e.id)},b); }));
         results.querySelectorAll("[data-episode]").forEach(element => {
           const searchButton = /** @type {HTMLButtonElement} */ (element);
           const d = searchButton.dataset;
@@ -125,6 +128,8 @@ export function mountDownloads(type, id, options = {}) {
         });
       } else {
         results.innerHTML = data.items.length ? data.items.map((item, index) => `<div class="release-card"><strong>${escHtml(item.title)}</strong><p>${escHtml(item.instance)} · ${escHtml(item.status)} · ${item.percent}%${item.eta ? ` · ETA ${escHtml(item.eta)}` : ""}</p>${item.canReplace ? `<button class="quick-btn secondary" data-target="${index}">Find alternatives</button>` : ""}<div class="release-options"></div></div>`).join("") : '<p>No active downloads.</p>';
+        results.innerHTML += data.libraries.filter(l=>l.canReplaceMovie).map(l=>`<div class="release-card"><button class="quick-btn secondary" data-replace-movie="${escHtml(l.instance)}">Replace movie file</button><div class="release-options" aria-live="polite"></div></div>`).join("");
+        results.querySelectorAll("[data-replace-movie]").forEach(el=>el.addEventListener("click",()=>findAlternatives({instance:/** @type {HTMLElement} */(el).dataset.replaceMovie,tmdbId:id,replaceExisting:true},/** @type {HTMLButtonElement} */(el))));
         results.querySelectorAll("[data-target]").forEach(element => {
           const searchButton = /** @type {HTMLButtonElement} */ (element);
           searchButton.onclick = () => findAlternatives(data.items[Number(searchButton.dataset.target)], searchButton);
@@ -146,21 +151,21 @@ export function mountDownloads(type, id, options = {}) {
 }
 
 /** @param {any} target @param {HTMLButtonElement} button */
-async function findAlternatives(target, button) {
+export async function findAlternatives(target, button) {
   const results = button.parentElement.querySelector(".release-options");
   button.disabled = true;
   results.textContent = "Searching indexers… This can take up to 90 seconds.";
   try {
-    const data = await apiPost("/api/downloads/search", { instance: target.instance, queueId: target.queueId, tmdbId: target.tmdbId, episodeId: target.episodeId, replaceExisting: target.replaceExisting === true });
+    const data = await apiPost("/api/downloads/search", { instance: target.instance, queueId: target.queueId, tmdbId: target.tmdbId, episodeId: target.episodeId, episodeIds: target.episodeIds, audio: target.audio, replaceExisting: target.replaceExisting === true });
     if (data.error) throw new Error(data.error);
     if (!data.releases.length) { results.textContent = "No alternatives found."; return; }
-    const replacementNote = data.action === "replace-file" ? '<p>Choose a different release. The current file stays while the replacement downloads. Sonarr handles import; its quality and rejection rules still apply.</p>' : "";
+    const replacementNote = data.action === "replace-file" ? '<p>Choose a different release. The current file stays while the replacement downloads. The library service handles import. Same-quality replacement is allowed when the quality and format score are verified; other rejection rules still apply.</p>' : "";
     const sorted = [...data.releases].sort((a, b) => Number(!!a.problems.length) - Number(!!b.problems.length));
-    results.innerHTML = replacementNote + '<p>Seed counts are reported by indexers and do not guarantee speed. Choices expire after two minutes.</p>' + sorted.map(r => `<div class="release-card"><strong>${escHtml(r.title)}</strong><p>${escHtml(r.quality)} · ${(r.size / 1024 ** 3).toFixed(1)} GiB · ${r.seeders ?? "Unknown"} seeders · ${escHtml(r.languages.join(", "))}</p>${r.problems.length ? `<p class="release-warning">${r.problems.map(escHtml).join(" · ")}</p>` : ""}<button class="quick-btn secondary" data-release="${r.index}" ${r.problems.length ? "disabled" : ""}>${data.action === "download" ? "Download this release" : data.action === "replace-file" ? "Replace episode with this release" : "Switch to this release"}</button></div>`).join("");
+    results.innerHTML = replacementNote + '<p>Release language labels are advertised, not verified audio tracks. Check the imported file after downloading.</p><p>Seed counts are reported by indexers and do not guarantee speed. Choices expire after two minutes.</p>' + sorted.map(r => `<div class="release-card"><strong>${escHtml(r.title)}</strong><p>${escHtml(r.quality)} · ${(r.size / 1024 ** 3).toFixed(1)} GiB · ${r.seeders ?? "Unknown"} seeders · ${escHtml(r.languages.join(", "))}</p>${r.problems.length ? `<p class="release-warning">${r.problems.map(escHtml).join(" · ")}</p>` : ""}<button class="quick-btn secondary" data-release="${r.index}" ${r.problems.length ? "disabled" : ""}>${data.action === "download" ? "Download this release" : data.action === "replace-file" ? "Replace with this release" : "Switch to this release"}</button></div>`).join("");
     results.querySelectorAll("[data-release]").forEach(element => {
       const switchButton = /** @type {HTMLButtonElement} */ (element);
       switchButton.onclick = async () => {
-        if (!confirm(data.action === "replace-file" ? "Download a replacement for this episode? The current file stays while it downloads. Sonarr may replace it during import. This affects everyone using the shared library." : data.action === "download" ? "Download this release for the missing episode? It will be available to everyone when ready." : `Replace this download for everyone? Current progress may be lost.${data.pack ? " This is a shared season transfer: all its episodes are affected." : ""}`)) return;
+        if (!confirm(data.action === "replace-file" ? `Download a replacement for ${data.pack ? "every episode in this season" : "this file"}? Current files stay while it downloads. The library service may replace them during import. This affects everyone using the shared library.` : data.action === "download" ? "Download this release for the missing episode? It will be available to everyone when ready." : `Replace this download for everyone? Current progress may be lost.${data.pack ? " This is a shared season transfer: all its episodes are affected." : ""}`)) return;
         results.querySelectorAll("button").forEach(b => { b.disabled = true; });
         button.disabled = true;
         try {

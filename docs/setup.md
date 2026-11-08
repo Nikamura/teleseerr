@@ -241,23 +241,64 @@ Season controls remain usable when direct Sonarr status is unconfigured or
 unavailable. Episode recovery still requires Manage downloads and a show already
 in Sonarr; monitoring alone is labelled as monitoring, not as a Seerr request.
 
-### Replacing an available episode
+### Troubleshooting and replacements
 
-Users with **Manage downloads** can choose **Replace episode** on an available
-single-episode file. The picker uses Sonarr's eligible releases and preserves all
-rejection rules (including quality/cutoff rules); this is not a forced downgrade
-or a promise that every same-quality release is selectable. Season packs and
-files shared by several episodes are excluded. An active transfer should be
-handled using **Find alternatives** instead.
+**Having trouble?** is available on title and episode screens. Linked users can
+report download, playback, wrong-episode, audio, subtitle and other issues.
+Reports include device, notes, file identity and a sanitized diagnostic snapshot;
+only their owner and the configured administrator can read them. Requests →
+Problems shows the user's reports; People → Reported problems is the admin queue.
+Admins can investigate and post updates. Reports remain open until explicitly
+resolved. A periodic two-minute checker notices newly imported file identities
+and labels them **replacement available**, asking the user to test playback.
+Updates are visible in the app; this does not send extra Telegram messages.
 
-The server checks series/episode/file identity before search and again before the
-grab. A file change, revoked permission, or new active transfer prevents the
-operation. The existing per-title cooldown, expiring selection tokens and audit
-log apply. Teleseerr never deletes the existing episode file or a queue entry as
-part of this action. Sonarr handles replacing the file during import; until
-then the current file remains. A successful grab means accepted for downloading,
-not a verified repair or successful import.
+Manage downloads permits release search/replacement, targeted automatic import
+retry, and torrent priority. It is independent of Seerr request approvals and
+quotas. Revocation is checked on every mutation. Current files are retained while
+a replacement downloads; Sonarr/Radarr own the eventual import and swap. No
+library-file deletion or global quality-profile changes are performed here.
 
-The configured administrator always has Manage downloads. Other linked users
-receive it through **Admin → Linked Users → Manage downloads**, separately from
-Seerr request approval/quotas. Revocation takes effect on the next server request.
+Available movies, individual episodes and complete seasons can be replaced.
+Complete seasons require every episode to have a file and no active transfer;
+this allows a multi-episode file to be handled together. Other selections fail
+closed. Same-quality disk/cutoff conflicts can be ignored only when quality ID,
+revision and custom-format score are verified not to regress. All unrelated
+rejections and downloadAllowed=false remain blocking. Release labels advertise
+languages; the explicit English filter is not a guarantee of imported audio.
+
+qBittorrent is mapped through the configured Arr download client, never through
+a user-supplied URL. Diagnostics show speed, peers and last activity when available.
+Watch sooner moves just that shared hash to the top, requires queueing enabled,
+verifies the resulting priority and has a persistent 30-minute cooldown. It never
+pauses other transfers or enables global queueing. No peers still needs a source.
+Import retry derives the completed transfer's path from Arr and submits only a
+DownloadedEpisodesScan/DownloadedMoviesScan with Auto mode, with a five-minute
+cooldown. It cannot fix storage permissions or a full disk.
+
+Pending request editing and cancellation require ownership, current pending
+status, confirmation, and the linked user's X-Api-User identity upstream. Failed
+request retries require status FAILED (4). Approved shared requests are protected.
+Season edits preserve the request's existing routing/profile settings.
+
+Optional integrations (server-side configuration only):
+
+- TELESEERR_MAINTAINERR_URL: read-only cleanup membership and eligibility dates.
+  Full membership is used; enriched season metadata supplies exact season numbers.
+  Normal cleanup policy is unchanged; dates indicate eligibility, not a guaranteed run.
+- TELESEERR_PLEX_URL and TELESEERR_PLEX_TOKEN: active playback is filtered by both
+  the linked Seerr plexId and this title's ratingKey. Other users' sessions, paths,
+  tokens and server identifiers are never returned. File tracks come from Arr's
+  imported-file scanner, separate from advertised release languages.
+- TELESEERR_STATUS_URL: independently hosted HTTPS status page. The included
+  Independent status GitHub workflow publishes to GitHub Pages after enabling
+  workflow-based Pages and setting TELESEERR_PUBLIC_URL to the public health URL.
+  Optional SEERR_PUBLIC_URL/PLEX_PUBLIC_URL repository variables can add public
+  probes. Never put credentials in these URLs. Checks run about every 15 minutes;
+  observations older than 45 minutes are shown as unknown. The probe measures
+  public reachability, not user playback. Schedule delays are possible.
+
+Diagnostics and reports redact private Arr messages into actionable categories.
+Unavailable adapters are explicitly labelled. Subtitle issues offer verified
+track information, player guidance and tracked reports; no global subtitle scan
+or automatic codec/quality setting changes are triggered.

@@ -1,3 +1,4 @@
+import { openReports } from "./support.js";
 import { icon } from "./icons.js";
 import { api, apiPost, escHtml, showLoading, hideLoading, toast, getUserState } from "./state.js";
 
@@ -9,7 +10,7 @@ export async function showAdmin() {
   const view = document.getElementById("admin-view");
   view.innerHTML = `
     <div class="page-heading"><p class="section-kicker">Your shared library</p><h1>People</h1><p>Good movie nights start with good company.</p></div>
-    <div class="people-tools"><label class="people-search">${icon("search",18)}<input type="search" id="admin-user-filter" placeholder="Find a person" aria-label="Find a linked person"></label><a href="#admin-add-person" class="text-link">Link someone ${icon("arrow",16)}</a></div>
+    <div class="help-entry"><button class="quick-btn secondary" id="admin-problems">Reported problems</button></div><div class="people-tools"><label class="people-search">${icon("search",18)}<input type="search" id="admin-user-filter" placeholder="Find a person" aria-label="Find a linked person"></label><a href="#admin-add-person" class="text-link">Link someone ${icon("arrow",16)}</a></div>
     <div class="admin-section" id="admin-pending-section" style="display:none">
       <div class="admin-section-title">Pending Requests</div>
       <div id="admin-pending-list"></div>
@@ -29,6 +30,7 @@ export async function showAdmin() {
       <div class="admin-section-title admin-ignored-toggle" id="admin-ignored-toggle">Ignored Users <span class="admin-toggle-arrow">&#9654;</span></div>
       <div id="admin-ignored-list" style="display:none"></div>
     </div>`;
+  document.getElementById("admin-problems").onclick = openReports;
 
   document.getElementById("admin-user-filter").oninput = (event) => {
     const term = /** @type {HTMLInputElement} */ (event.target).value.trim().toLowerCase();

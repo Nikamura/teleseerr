@@ -221,6 +221,7 @@ export async function handleRequests({ res, url, auth }: RouteContext): Promise<
         mediaStatus: r.media.status,
         is4k: r.is4k,
         createdAt: r.createdAt,
+        seasons: r.seasons?.map((s) => s.seasonNumber) ?? [],
       };
     }),
   );

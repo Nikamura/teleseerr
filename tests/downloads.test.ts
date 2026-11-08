@@ -104,3 +104,14 @@ test("cleanup failure reports partial success and persistent cooldown blocks a s
   await grant(45); const next=await search(45);
   await assert.rejects(handleReleaseSwitch(ctx(45,{token:next.token,index:0,confirmed:true}).context), /recently attempted/);
 });
+
+test("same-quality file replacement permits only verified disk conflicts and preserves all unrelated rejections", async () => {
+ const {releaseProblems}=await import("../src/routes/downloads.js");
+ const group=[{id:0,downloadId:"",movieId:9,title:"old",size:0,sizeleft:0,status:"available",existingQuality:{quality:{id:7},revision:{version:1,real:0}},existingScore:10}];
+ const release={guid:"new",indexerId:3,title:"new",protocol:"torrent",size:100,rejected:true,quality:{quality:{id:7},revision:{version:1,real:0}},customFormatScore:10,rejections:["Existing file on disk is of equal or higher preference: WEBDL-1080p","Existing file meets cutoff: WEBDL-1080p"]};
+ assert.deepEqual(releaseProblems(release,group,false,true),[]);
+ assert.ok(releaseProblems({...release,customFormatScore:9},group,false,true).length);
+ assert.ok(releaseProblems({...release,rejections:[...release.rejections,"Wrong language"]},group,false,true).includes("Wrong language"));
+ assert.ok(releaseProblems({...release,downloadAllowed:false},group,false,true).length);
+ assert.ok(releaseProblems(release,group,false,false).length);
+});

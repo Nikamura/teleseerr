@@ -212,3 +212,26 @@ body[data-screen="detail"] .search-bar { display: none; }
 .person-details summary, .admin-unlink-btn { min-height: 44px; }
 .admin-pending-actions button, .seerr-user-row button { min-height: 44px; }
 .request-list { padding: 0; }
+
+/* Troubleshooting keeps details secondary and actions close to their context. */
+.support-dialog { width:min(620px,calc(100vw - 24px)); max-height:90dvh; padding:24px; color:var(--text,#f6f3ed); background:var(--bg,#17191b); border:1px solid #ffffff20; border-radius:24px; box-shadow:0 24px 100px #0009; }
+.support-dialog::backdrop { background:#0009; backdrop-filter:blur(5px); }
+.support-dialog header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:24px; }
+.support-dialog h2 { margin:0; font-size:28px; }
+.support-dialog h3 { margin:0 0 10px; }
+.support-dialog p { line-height:1.55; overflow-wrap:anywhere; }
+.support-dialog label { display:grid; gap:8px; margin:18px 0; font-size:14px; }
+.support-dialog input,.support-dialog select,.support-dialog textarea { width:100%; box-sizing:border-box; background:#ffffff09; color:inherit; border:1px solid #8886; border-radius:12px; padding:12px; font:inherit; }
+.support-dialog select option { color:#161719; }
+.support-library { padding:18px; margin:14px 0; border:1px solid #8884; border-radius:16px; }
+.support-transfer { border-top:1px solid #8883; margin-top:12px; padding-top:12px; }
+.support-muted { color:var(--text-secondary,#aaa); font-size:13px; }
+.support-dialog button { margin:4px 4px 4px 0; min-height:44px; }
+.support-preferences { margin-top:24px; }
+.help-entry { display:flex; gap:8px; flex-wrap:wrap; margin:18px 0; }
+.request-management { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.request-item { flex-wrap:wrap; }
+.report-state { color:#f2bd63; text-transform:capitalize; }
+.service-banner { display:block; width:100%; border:0; padding:12px 20px; background:#59431d; color:#ffe0a3; text-align:center; font:inherit; cursor:pointer; }
+.support-dialog .pending-season { display:flex; align-items:center; gap:12px; }
+.support-dialog .pending-season input { width:22px; height:22px; accent-color:#f2bd63; }

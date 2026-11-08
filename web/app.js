@@ -1,3 +1,4 @@
+import { openServiceStatus } from "./support.js";
 import { icon } from "./icons.js";
 import { tg, isTelegramWebApp, api, setCurrentTab, setPreviousView, setUserState, getUserState, setCaps, clearProgressPolling } from "./state.js";
 import { setCardClickHandler } from "./grid.js";
@@ -130,6 +131,12 @@ async function init() {
 
   // Fetch capabilities for 4K support
   api("/api/capabilities").then((c) => { setCaps(c); }).catch(() => {});
+
+  api("/api/support/status").then(status => {
+    const unavailable=status.services.filter(s=>!s.available);
+    if (!unavailable.length) return;
+    const banner=document.createElement("button");banner.className="service-banner";banner.textContent=`${unavailable.map(s=>s.name).join(", ")} unavailable · Check status`;banner.onclick=openServiceStatus;document.querySelector(".top-bar")?.after(banner);
+  }).catch(()=>{});
 
   // Load initial content
   loadTabContent("trending");
