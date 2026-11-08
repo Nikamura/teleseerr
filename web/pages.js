@@ -39,8 +39,9 @@ export async function loadRequests(view) {
     if (data.pageInfo.pages > 1) {
       let page = 1;
       addLoadMore(view, async () => {
-        page++;
-        const more = await api(`/api/requests?page=${page}`);
+        const nextPage=page+1;
+        const more = await api(`/api/requests?page=${nextPage}`);
+        page=nextPage;
         renderRequestList(more.results, view, true);
         if (page >= more.pageInfo.pages) removeLoadMore(view);
       });
@@ -80,7 +81,7 @@ export function renderRequestList(items, container, append = false) {
     el.innerHTML = `
       ${poster}
       <div class="request-info">
-        <div class="request-title">${typeIcon} ${escHtml(item.title)}${item.is4k ? ' <span class="request-4k">4K</span>' : ""}</div>
+        <a class="request-title" href="/${item.mediaType}/${item.tmdbId}">${typeIcon} ${escHtml(item.title)}${item.is4k ? ' <span class="request-4k">4K</span>' : ""}</a>
         <div class="request-meta">
           <span class="badge ${statusCls}">${requestStatusText(item.status)}</span>
           ${item.mediaStatus === 5 && item.status !== 5 ? '<span class="badge badge-available">Available</span>' : ""}
@@ -88,6 +89,11 @@ export function renderRequestList(items, container, append = false) {
         </div>
       </div>`;
 
+    /** @type {HTMLAnchorElement} */(el.querySelector(".request-title")).addEventListener("click", event => {
+      event.stopPropagation();
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault(); void openDetail(item.mediaType,item.tmdbId);
+    });
     if (item.status === 1 || item.status === 4) {
       const controls = document.createElement("div"); controls.className="request-management";
       controls.innerHTML = item.status === 1 ? `<button class="quick-btn secondary" data-change="cancel">Cancel pending request</button>${item.mediaType === "tv" ? '<button class="quick-btn secondary" data-change="edit">Edit seasons</button>' : ""}` : '<button class="quick-btn secondary" data-change="retry">Retry failed request</button>';
@@ -205,6 +211,7 @@ export function renderQuotaBar(label, q) {
 
 /** @returns {void} */
 export function showUnlinked() {
+  document.body.dataset.screen="unlinked";
   const userState = getUserState();
   // Hide everything except unlinked view
   /** @type {HTMLElement} */ (document.querySelector(".top-bar")).style.display = "none";
@@ -229,6 +236,7 @@ export function showUnlinked() {
 
 /** @returns {void} */
 export function showLoginScreen() {
+  document.body.dataset.screen="login";
   /** @type {HTMLElement} */ (document.querySelector(".top-bar")).style.display = "none";
   document.getElementById("tabs-nav").style.display = "none";
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
@@ -249,10 +257,16 @@ export function showLoginScreen() {
 /** @returns {Promise<void>} */
 export async function loadTelegramLoginWidget() {
   const wrap = document.getElementById("telegram-login-wrap");
+  const failed = () => {
+    wrap.innerHTML='<p class="unlinked-hint" role="status">Could not load sign-in. Open this app from Telegram or try again.</p><button class="quick-btn secondary" type="button">Try again</button>';
+    wrap.querySelector("button").onclick=()=>loadTelegramLoginWidget();
+  };
+  wrap.innerHTML='<p class="unlinked-hint" role="status">Loading sign-in…</p>';
   try {
     const res = await fetch("/api/bot-info");
     if (!res.ok) throw new Error("Failed to fetch bot info");
     const { username } = await res.json();
+    if (typeof username !== "string" || !/^[a-zA-Z0-9_]{5,32}$/.test(username)) throw new Error("Invalid bot metadata");
 
     // Expose global callback for the widget
     window.onTelegramAuth = function (user) {
@@ -269,8 +283,10 @@ export async function loadTelegramLoginWidget() {
     script.setAttribute("data-onauth", "onTelegramAuth(user)");
     script.setAttribute("data-request-access", "write");
     script.async = true;
+    script.onerror=failed;
+    wrap.innerHTML="";
     wrap.appendChild(script);
   } catch {
-    wrap.innerHTML = '<p class="unlinked-hint">Could not load login. Try opening from Telegram instead.</p>';
+    failed();
   }
 }

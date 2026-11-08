@@ -45,19 +45,24 @@ export async function loadDiscoverPage(view) {
  * @returns {Promise<void>}
  */
 export async function loadDiscoverSection(section, container) {
+  const retry = /** @type {HTMLButtonElement | null} */(container.querySelector("[data-retry-section]"));
+  if (retry) { retry.disabled=true; retry.textContent="Loading…"; }
   try {
     const data = await api(section.endpoint);
+    if (!container.isConnected) return;
     const items = (data.results ?? []).filter((r) => r.mediaType !== "person").slice(0, 20);
     const row = container.querySelector(".slider-row");
     row.innerHTML = "";
 
     if (items.length === 0) {
+      if (section.key === "trending") document.getElementById("discover-spotlight")?.remove();
       container.style.display = "none";
       return;
     }
 
     if (section.key === "trending") {
-      const host = document.getElementById("discover-spotlight");
+      let host = document.getElementById("discover-spotlight");
+      if (!host) { host=document.createElement("div"); host.id="discover-spotlight"; container.before(host); }
       const featured = items.find(item => item.backdropPath) ?? items[0];
       if (host && featured) {
         host.className = "spotlight-host";
@@ -71,8 +76,10 @@ export async function loadDiscoverSection(section, container) {
       row.appendChild(renderSliderCard(item));
     }
   } catch {
+    if (!container.isConnected) return;
     if (section.key === "trending") document.getElementById("discover-spotlight")?.remove();
-    container.querySelector(".slider-row").innerHTML = '<div class="empty" style="padding:12px;font-size:12px">Failed to load</div>';
+    container.querySelector(".slider-row").innerHTML = '<div class="empty" role="status">This section is temporarily unavailable.<br><button class="quick-btn secondary" data-retry-section>Try again</button></div>';
+    container.querySelector("[data-retry-section]").addEventListener("click",()=>loadDiscoverSection(section,container));
   }
 }
 
@@ -97,7 +104,8 @@ export async function loadGenreView(type, view) {
       try {
         genresCache[genreKey] = await api(`/api/genres/${genreKey}`);
       } catch {
-        view.innerHTML = '<div class="empty">Failed to load genres</div>';
+        view.innerHTML = '<div class="empty" role="status">Categories are temporarily unavailable.<br><button class="quick-btn secondary">Try again</button></div>';
+        view.querySelector("button").onclick=()=>loadGenreView(type,view);
         return;
       }
     }
@@ -228,12 +236,14 @@ export function buildDiscoverParams(type) {
   return params.toString();
 }
 
+const discoverVersions = new WeakMap();
 /**
  * @param {string} type
  * @param {HTMLElement} view
  * @returns {Promise<void>}
  */
 export async function loadDiscover(type, view) {
+  const version=(discoverVersions.get(view) ?? 0)+1; discoverVersions.set(view,version);
   const content = document.getElementById(`${type}-content`);
   renderSkeletons(content);
 
@@ -243,19 +253,25 @@ export async function loadDiscover(type, view) {
 
   try {
     const data = await api(`/api/discover/${apiType}?page=1&${filterParams}`);
+    if (discoverVersions.get(view)!==version) return;
     content.innerHTML = "";
+    if (!data.results.length) { content.innerHTML='<div class="empty" role="status">No titles match these filters. Try another genre or reset your filters.</div>'; return; }
     renderGrid(data.results, content);
     if (data.totalPages > 1) {
       let page = 1;
       addLoadMore(content, async () => {
-        page++;
-        const more = await api(`/api/discover/${apiType}?page=${page}&${filterParams}`);
+        const nextPage=page+1;
+        const more = await api(`/api/discover/${apiType}?page=${nextPage}&${filterParams}`);
+        if (discoverVersions.get(view)!==version) return;
+        page=nextPage;
         renderGrid(more.results, content, true);
         if (page >= more.totalPages) removeLoadMore(content);
       });
     }
   } catch {
-    content.innerHTML = '<div class="empty">Failed to load</div>';
+    if (discoverVersions.get(view)!==version) return;
+    content.innerHTML = '<div class="empty" role="status">Titles are temporarily unavailable.<br><button class="quick-btn secondary">Try again</button></div>';
+    content.querySelector("button").onclick=()=>loadDiscover(type,view);
   }
 }
 
@@ -268,27 +284,36 @@ export function showFilterDropdown(type, view) {
   const activeFilters = getActiveFilters();
   const f = activeFilters[type];
 
-  const overlay = document.createElement("div");
-  overlay.className = "filter-overlay";
-  overlay.onclick = () => { overlay.remove(); dropdown.remove(); };
-  document.body.appendChild(overlay);
-
-  const dropdown = document.createElement("div");
+  document.getElementById("filter-dialog")?.remove();
+  const dropdown = document.createElement("dialog");
   dropdown.className = "filter-dropdown";
+  dropdown.id = "filter-dialog";
+  dropdown.setAttribute("aria-labelledby","filter-dialog-title");
+  const trigger = /** @type {HTMLElement} */(view.querySelector(".filter-btn"));
+  dropdown.addEventListener("close",()=>{
+    dropdown.remove();
+    const next = trigger?.isConnected ? trigger : /** @type {HTMLElement} */(view.querySelector(".filter-btn"));
+    if (next?.getClientRects().length) next.focus();
+  });
+  dropdown.addEventListener("click",event=>{
+    if(event.target !== dropdown) return;
+    const r=dropdown.getBoundingClientRect();
+    if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom) dropdown.close();
+  });
   dropdown.innerHTML = `
-    <div class="filter-dropdown-title">Filters</div>
+    <header class="filter-dialog-header"><h2 class="filter-dropdown-title" id="filter-dialog-title">Filters</h2><button type="button" class="quick-btn secondary" id="filter-close" aria-label="Close filters">✕</button></header>
     <div class="filter-group">
       <div class="filter-group-label">Year Range</div>
       <div class="filter-range-row">
-        <input type="number" id="filter-year-from" placeholder="From (e.g. 2000)" min="1900" max="2030" value="${f.yearFrom ?? ""}">
-        <input type="number" id="filter-year-to" placeholder="To (e.g. 2025)" min="1900" max="2030" value="${f.yearTo ?? ""}">
+        <input type="number" id="filter-year-from" aria-label="From year" placeholder="From (e.g. 2000)" min="1900" max="2030" value="${f.yearFrom ?? ""}">
+        <input type="number" id="filter-year-to" aria-label="To year" placeholder="To (e.g. 2025)" min="1900" max="2030" value="${f.yearTo ?? ""}">
       </div>
     </div>
     <div class="filter-group">
       <div class="filter-group-label">Rating Range (0-10)</div>
       <div class="filter-range-row">
-        <input type="number" id="filter-rating-from" placeholder="Min" min="0" max="10" step="0.5" value="${f.ratingFrom ?? ""}">
-        <input type="number" id="filter-rating-to" placeholder="Max" min="0" max="10" step="0.5" value="${f.ratingTo ?? ""}">
+        <input type="number" id="filter-rating-from" aria-label="Minimum rating" placeholder="Min" min="0" max="10" step="0.5" value="${f.ratingFrom ?? ""}">
+        <input type="number" id="filter-rating-to" aria-label="Maximum rating" placeholder="Max" min="0" max="10" step="0.5" value="${f.ratingTo ?? ""}">
       </div>
     </div>
     <div class="filter-actions">
@@ -297,21 +322,21 @@ export function showFilterDropdown(type, view) {
     </div>`;
 
   document.body.appendChild(dropdown);
+  dropdown.showModal();
+  document.getElementById("filter-close").onclick = () => dropdown.close();
 
   document.getElementById("filter-apply").onclick = () => {
     activeFilters[type].yearFrom = /** @type {HTMLInputElement} */ (document.getElementById("filter-year-from")).value || undefined;
     activeFilters[type].yearTo = /** @type {HTMLInputElement} */ (document.getElementById("filter-year-to")).value || undefined;
     activeFilters[type].ratingFrom = /** @type {HTMLInputElement} */ (document.getElementById("filter-rating-from")).value || undefined;
     activeFilters[type].ratingTo = /** @type {HTMLInputElement} */ (document.getElementById("filter-rating-to")).value || undefined;
-    overlay.remove();
-    dropdown.remove();
+    dropdown.close();
     loadGenreView(type, view);
   };
 
   document.getElementById("filter-reset").onclick = () => {
     activeFilters[type] = {};
-    overlay.remove();
-    dropdown.remove();
+    dropdown.close();
     loadGenreView(type, view);
   };
 }

@@ -232,7 +232,7 @@ export function renderDetail(type, d) {
     </div>
     <div class="detail-header">
       ${d.backdropPath
-        ? `<img class="detail-backdrop" src="${posterUrl(d.backdropPath, "w500")}" alt="">`
+        ? `<img class="detail-backdrop" src="${posterUrl(d.backdropPath, "w1280")}" alt="">`
         : '<div class="detail-backdrop" style="background:var(--muted)"></div>'}
       <div class="detail-backdrop-gradient"></div>
     </div>
@@ -355,11 +355,11 @@ export function renderCastGrid(cast) {
       ? `<img class="cast-photo" src="${TMDB_IMG}/w185${c.profilePath}" alt="" loading="lazy">`
       : `<div class="cast-photo cast-photo-empty">${icon("user",28)}</div>`;
     html += `
-      <div class="cast-card" data-person-id="${c.id}">
+      <button type="button" class="cast-card" data-person-id="${c.id}" aria-label="View ${escHtml(c.name)}">
         ${photo}
         <div class="cast-name">${escHtml(c.name)}</div>
         <div class="cast-character">${escHtml(c.character || "")}</div>
-      </div>`;
+      </button>`;
   }
   html += "</div>";
   return html;
@@ -530,9 +530,10 @@ export function updateTvRequestBar(show) {
 
   const sorted = [...selectedSeasons].sort((a, b) => a - b);
   const label = sorted.map((n) => `S${n}`).join(", ");
+  const selectionLabel = sorted.length === 1 ? `season ${sorted[0]}` : `${sorted.length} seasons`;
 
   const was4k = /** @type {HTMLInputElement | null} */ (document.getElementById("request-4k-cb"))?.checked ?? false;
-  showRequestBar(`Request ${label}`, async () => {
+  showRequestBar(`Request ${selectionLabel}`, async () => {
     const count = (show.seasons ?? []).filter(s => sorted.includes(s.seasonNumber)).reduce((n,s) => n + (s.episodeCount ?? 0),0);
     if (!confirm(`Request ${sorted.length} season${sorted.length === 1 ? "" : "s"}: ${label} (${count} episodes)? Already available episodes are retained. This is a shared library request.`)) return;
     showLoading();
@@ -544,7 +545,7 @@ export function updateTvRequestBar(show) {
     });
     hideLoading();
     if (result.success) {
-      toast(result.status === 2 ? `${label} approved!` : `${label} requested!`);
+      toast(result.status === 2 ? `${selectionLabel} approved!` : `${selectionLabel} requested!`);
       removeRequestBar();
       selectedSeasons.clear();
       openDetail("tv", show.id);
@@ -700,7 +701,8 @@ export async function loadFilmography(person) {
   row.className = "slider-row";
 
   for (const item of sorted) {
-    const card = document.createElement("div");
+    const card = document.createElement("button");
+    card.type = "button";
     card.className = "slider-card";
     const name = item.title ?? item.name ?? "Unknown";
     const y = year(item.releaseDate ?? item.firstAirDate);

@@ -1,5 +1,5 @@
 import { icon } from "./icons.js";
-import { posterUrl, year, statusBadge, escHtml } from "./state.js";
+import { posterUrl, year, statusBadge, escHtml, toast } from "./state.js";
 
 // ── Card click handler (set by consumer to avoid circular imports) ──
 
@@ -43,13 +43,10 @@ export function renderGrid(items, container, append = false) {
         : "";
 
       return `
-        <button type="button" class="media-card" data-type="${r.mediaType}" data-id="${r.id}">
-          ${poster}
-          ${badge}
-          <div class="card-title">
-            ${escHtml(name)} (${y})
-            ${rating}
-          </div>
+        <button type="button" class="media-card" data-type="${r.mediaType}" data-id="${r.id}" aria-label="View ${escHtml(name)}" title="${escHtml(name)}">
+          <div class="media-card-artwork">${poster || `<span class="poster-placeholder">${icon("film",28)}</span>`}${badge}</div>
+          <div class="card-title">${escHtml(name)}</div>
+          <div class="card-meta">${y ? `<span>${escHtml(y)}</span>` : ""}${rating}</div>
         </button>`;
     })
     .join("");
@@ -138,9 +135,9 @@ export function addLoadMore(container, handler) {
   btn.onclick = async () => {
     btn.disabled = true;
     btn.textContent = "Loading...";
-    await handler();
-    btn.disabled = false;
-    btn.textContent = "Load more";
+    try { await handler(); }
+    catch { toast("Could not load more. Try again."); }
+    finally { btn.disabled = false; btn.textContent = "Load more"; }
   };
   container.appendChild(btn);
 }

@@ -15,7 +15,8 @@ function sheet(title) {
   const dialog = document.createElement("dialog");
   dialog.id = "support-dialog";
   dialog.className = "support-dialog";
-  dialog.innerHTML = `<header><div><p class="section-kicker">Here to help</p><h2>${escHtml(title)}</h2></div><button class="quick-btn secondary" aria-label="Close">✕</button></header><div class="support-content"></div>`;
+  dialog.setAttribute("aria-labelledby","support-title");
+  dialog.innerHTML = `<header><div><p class="section-kicker">Here to help</p><h2 id="support-title">${escHtml(title)}</h2></div><button class="quick-btn secondary" aria-label="Close">✕</button></header><div class="support-content"></div>`;
   dialog.querySelector("header button").addEventListener("click", () => dialog.close());
   dialog.addEventListener("close", () => dialog.remove());
   document.body.append(dialog);

@@ -82,3 +82,25 @@ All four rows share a 20px horizontal gutter, reduced to 14px below 360px. Filte
 controls retain 44px targets; genre/sort rows scroll horizontally on narrow screens.
 Desktop search and category tabs span the full poster-grid content width; do not
 reintroduce a fixed mobile-width cap inside the desktop layout.
+
+## Responsive flow audit
+
+The same interface is checked at narrow phones, wide phones, tablet widths,
+desktop breakpoints and short landscape heights, in both themes. Tablet widths
+600–899px use a wider canvas and four poster columns; narrow phones use two
+columns, other phones three and desktop six. Poster titles and metadata sit
+below the artwork, matching the home-page card language. Desktop genres wrap;
+phone genres retain swipeable rows. Desktop detail posters/headings are larger,
+request actions stay within the app width, and fixed bars reserve scroll space.
+
+Dialogs use the active theme and viewport bounds, wrap long release names and
+keep Close reachable while scrolling. Filters use a native dialog: bottom sheet
+on phones and a bounded centered panel on larger screens, with Escape, focus
+restoration and labelled inputs. Touch inputs use 16px type and 44px controls.
+Profile identities wrap instead of clipping; cast and request titles are
+keyboard-reachable. Login/unlinked screens hide browse controls.
+
+One document scroller owns route restoration; dialogs lock background scrolling.
+Pagination failures restore their action without skipping a page, stale filter
+responses cannot replace newer results, and empty/error states stop skeletons
+and provide recovery. These changes preserve API permissions and media behavior.

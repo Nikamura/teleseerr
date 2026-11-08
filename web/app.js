@@ -144,7 +144,7 @@ async function init() {
 
   // One route renderer for click navigation, deep links and browser Back/Forward.
   startRouter(async (route, state) => {
-    document.getElementById("support-dialog")?.remove();
+    document.querySelectorAll("dialog[open]").forEach(dialog => /** @type {HTMLDialogElement} */(dialog).close());
     if (route.kind === "tab") {
       if (route.tab === "admin" && !getUserState().isAdmin) { navigate("/discover",{replace:true}); return; }
       await switchTab(route.tab, true);
