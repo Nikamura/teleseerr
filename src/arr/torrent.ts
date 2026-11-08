@@ -111,9 +111,11 @@ async function loginCookie(base: string, username: string, password: string): Pr
       redirect: "error",
       signal: AbortSignal.timeout(5000),
     });
-    if (!response.ok || (await response.text()).trim() !== "Ok.")
+    const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
+    const accepted = response.status === 204 || (await response.text()).trim() === "Ok.";
+    if (!response.ok || !accepted || !/^SID=.+/.test(cookie))
       throw new ClientError(502, "Torrent client login unavailable");
-    return response.headers.get("set-cookie")?.split(";")[0] ?? "";
+    return cookie;
   })();
   sessions.set(base, { at: Date.now(), cookie });
   try {

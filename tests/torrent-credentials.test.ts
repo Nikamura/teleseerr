@@ -54,7 +54,10 @@ test("explicit torrent credentials bind to the exact configured client URL", asy
       logins++;
       const body = new URLSearchParams(String(init?.body));
       assert.equal(body.get("password"), "host-secret");
-      return new Response("Ok.", { headers: { "set-cookie": "SID=private; HttpOnly" } });
+      return new Response(null, {
+        status: 204,
+        headers: { "set-cookie": "SID=private; HttpOnly" },
+      });
     }
     return new Response(JSON.stringify([{ hash: item.downloadId, priority: 3 }]));
   };
