@@ -89,7 +89,7 @@ function reserve(key: string): void {
   if (Date.now() - (times[key] ?? 0) < 120_000)
     throw new ClientError(
       409,
-      "A switch was recently attempted. Refresh and wait two minutes before trying again.",
+      "A download action was recently attempted. Refresh and wait two minutes before trying again.",
     );
   mkdirSync(config.DATA_DIR, { recursive: true });
   const next = Object.fromEntries(
@@ -297,6 +297,120 @@ async function missingGroup(instance: ArrInstance, target: MissingTarget): Promi
     },
   ];
 }
+// Sonarr owns command execution; this cache only connects its status to the title view.
+const seasonSearches = new Map<string, { id: number; at: number }>();
+export async function handleSeasonRecovery({ auth, req, res }: RouteContext): Promise<void> {
+  authorize(auth.userId);
+  const body = await parseJsonBody(req);
+  const instance = instanceByName(body["instance"]);
+  const tmdbId = body["tmdbId"],
+    season = body["season"];
+  const episodeId = body["episodeId"];
+  if (
+    instance.type !== "sonarr" ||
+    typeof tmdbId !== "number" ||
+    !Number.isSafeInteger(tmdbId) ||
+    tmdbId <= 0 ||
+    typeof season !== "number" ||
+    !Number.isSafeInteger(season) ||
+    season < 0 ||
+    (episodeId !== undefined &&
+      (typeof episodeId !== "number" || !Number.isSafeInteger(episodeId) || episodeId <= 0)) ||
+    body["confirmed"] !== true
+  )
+    throw new ClientError(400, "Choose a season and confirm recovery");
+  const series = await findSeries(instance, tmdbId);
+  if (!series) throw new ClientError(409, "Series is not in the connected library");
+  const key = `${instance.name}:${series.id}`;
+  if (busy.has(key)) throw new ClientError(409, "Another download action is in progress");
+  busy.add(key);
+  try {
+    const episodes = await arr<Episode[]>(instance, `episode?seriesId=${series.id}`);
+    const items = await queue(instance);
+    const targets = episodes.filter(
+      (e) =>
+        e.seriesId === series.id &&
+        e.seasonNumber === season &&
+        (episodeId === undefined || e.id === episodeId) &&
+        episodeState(
+          e,
+          items.filter((i) => i.seriesId === series.id && i.episodeId === e.id),
+        ) === "missing",
+    );
+    if (!targets.length)
+      throw new ClientError(409, "No missing aired episodes to recover. Refresh episodes.");
+    const searchKey = `${key}:${season}`;
+    const previous = seasonSearches.get(searchKey);
+    if (previous && Date.now() - previous.at < 1_800_000) {
+      const command = await arr<{ status: string }>(instance, `command/${previous.id}`);
+      if (["queued", "started"].includes(command.status))
+        throw new ClientError(409, "A search for this season is already running");
+    }
+    authorize(auth.userId);
+    reserve(key);
+    audit(auth.userId, instance.name, 0, `season_${season}_recovery_attempted`);
+    try {
+      // Unlike PUT series, null monitoringOptions preserves episode flags.
+      await arr(instance, "seasonpass", "POST", {
+        series: [
+          { id: series.id, monitored: true, seasons: [{ seasonNumber: season, monitored: true }] },
+        ],
+      });
+      await arr(instance, "episode/monitor", "PUT", {
+        episodeIds: targets.map((e) => e.id),
+        monitored: true,
+      });
+      // Recheck after monitoring: imports and existing transfers must not be searched again.
+      const fresh = await arr<Episode[]>(instance, `episode?seriesId=${series.id}`);
+      const transfers = await queue(instance);
+      const ids = fresh
+        .filter(
+          (e) =>
+            targets.some((t) => t.id === e.id) &&
+            e.seriesId === series.id &&
+            e.seasonNumber === season &&
+            e.monitored &&
+            episodeState(
+              e,
+              transfers.filter((i) => i.seriesId === series.id && i.episodeId === e.id),
+            ) === "missing",
+        )
+        .map((e) => e.id);
+      authorize(auth.userId);
+      if (!ids.length) {
+        json(res, {
+          success: true,
+          count: 0,
+          message: "Monitoring restored. Episodes are already available or queued.",
+        });
+        return;
+      }
+      const command = await arr<{ id: number }>(instance, "command", "POST", {
+        name: "EpisodeSearch",
+        episodeIds: ids,
+      });
+      if (!Number.isSafeInteger(command.id) || command.id <= 0)
+        throw new Error("Missing command identity");
+      for (const [k, v] of seasonSearches)
+        if (Date.now() - v.at > 1_800_000) seasonSearches.delete(k);
+      seasonSearches.set(searchKey, { id: command.id, at: Date.now() });
+      audit(auth.userId, instance.name, 0, `season_${season}_search_accepted`);
+      json(res, {
+        success: true,
+        count: ids.length,
+        message: `Search queued for ${ids.length === 1 ? "1 missing episode" : `${ids.length} missing episodes`}. Downloads will appear when a suitable release is found.`,
+      });
+    } catch {
+      audit(auth.userId, instance.name, 0, `season_${season}_recovery_unconfirmed`);
+      throw new ClientError(
+        502,
+        "Recovery could not be confirmed. Monitoring may have changed or a search may be running. Refresh status before retrying.",
+      );
+    }
+  } finally {
+    busy.delete(key);
+  }
+}
 export async function handleDownloads({ auth, params, res }: RouteContext): Promise<void> {
   const id = Number(params["id"]),
     type = params["type"];
@@ -314,10 +428,23 @@ export async function handleDownloads({ auth, params, res }: RouteContext): Prom
       const episodes = series
         ? await arr<Episode[]>(instance, `episode?seriesId=${series.id}`)
         : [];
+      const searches = [];
+      for (const [key, value] of seasonSearches) {
+        if (Date.now() - value.at > 1_800_000) {
+          seasonSearches.delete(key);
+          continue;
+        }
+        if (!series || !key.startsWith(`${instance.name}:${series.id}:`)) continue;
+        const command = await arr<{ status: string }>(instance, `command/${value.id}`).catch(
+          () => ({ status: "unknown" }),
+        );
+        searches.push({ season: Number(key.split(":").at(-1)), status: command.status });
+      }
       const seen = new Set<string>();
       return {
         instance: instance.name,
         inLibrary: !!series,
+        searches,
         episodes: episodes
           .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber)
           .map((episode) => {
@@ -379,10 +506,11 @@ export async function handleDownloads({ auth, params, res }: RouteContext): Prom
   json(res, {
     configured: instances.length > 0,
     items: results.flatMap((r) => r.items),
-    libraries: results.map(({ instance, inLibrary, episodes }) => ({
+    libraries: results.map(({ instance, inLibrary, episodes, searches }) => ({
       instance,
       inLibrary,
       episodes,
+      searches,
     })),
     canManage,
     updatedAt: Date.now(),

@@ -3,6 +3,7 @@ import {
   handleDownloads,
   handleReleaseSearch,
   handleReleaseSwitch,
+  handleSeasonRecovery,
 } from "./routes/downloads.js";
 import { Admission } from "./admission.js";
 const apiAdmission = new Admission();
@@ -103,6 +104,7 @@ async function handleMe(res: ServerResponse, auth: ValidAuth): Promise<void> {
 
 const routes: Route[] = [
   { method: "GET", pattern: "/api/:type/:id/downloads", handler: handleDownloads },
+  { method: "POST", pattern: "/api/downloads/recover-season", handler: handleSeasonRecovery },
   { method: "POST", pattern: "/api/downloads/search", handler: handleReleaseSearch },
   { method: "POST", pattern: "/api/downloads/switch", handler: handleReleaseSwitch },
   {

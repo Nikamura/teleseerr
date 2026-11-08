@@ -18,10 +18,15 @@ function renderEpisodes(data, tmdbId) {
     return `<p class="episode-overview"><strong>${available} of ${episodes.length} episodes available</strong>${missing ? ` · ${missing} missing` : ""}${data.libraries.length > 1 ? ` · ${escHtml(library.instance)}` : ""}</p>` + seasons.map(season => {
       const group = episodes.filter(e => e.season === season);
       const ready = group.filter(e => e.state === "available").length;
-      return `<details class="episode-season"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span>${ready}/${group.length} available</span></summary><div class="episode-list">` + group.map(ep => {
+      const missing = group.filter(e => e.state === "missing");
+      const unmonitored = missing.filter(e => !e.monitored).length;
+      const search = library.searches?.find(s => s.season === season);
+      const searching = search && ["queued", "started"].includes(search.status);
+      const recovery = `<div class="season-recovery">${missing.length ? `<p>${missing.length} missing${unmonitored ? ` · ${unmonitored} not monitored` : ""}</p>` : ""}${searching ? '<p role="status">Searching for requested episodes…</p>' : search?.status === "failed" ? '<p>Search failed. Refresh or try again.</p>' : search?.status === "completed" && missing.length ? '<p>Search finished. Some episodes still need a suitable release.</p>' : ""}${data.canManage && missing.length && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-count="${missing.length}" data-instance="${escHtml(library.instance)}">Download missing episodes</button>` : ""}<p class="recovery-result" role="status"></p></div>`;
+      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span>${ready}/${group.length} available</span></summary>${recovery}<div class="episode-list">` + group.map(ep => {
         const label = episodeLabels[ep.state] ?? "Status unknown";
         const date = ep.airDate ? new Date(ep.airDate).toLocaleDateString(undefined, {year:"numeric",month:"short",day:"numeric"}) : "";
-        return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${!ep.monitored && ep.state === "missing" ? '<p>Not monitored for downloads.</p>' : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<div class="release-options" aria-live="polite"></div></div>`;
+        return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${!ep.monitored && ep.state === "missing" ? '<p>Not monitored for downloads.</p>' : ""}${data.canManage && ep.state === "missing" && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-recover-episode="${ep.id}" data-episode-label="S${String(season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}" data-count="1" data-instance="${escHtml(library.instance)}">Download episode</button><p class="recovery-result" role="status"></p>` : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<div class="release-options" aria-live="polite"></div></div>`;
       }).join("") + '</div></details>';
     }).join("");
   }).join("");
@@ -34,7 +39,11 @@ export function mountDownloads(type, id) {
   host.innerHTML = `<div class="episode-section-header"><div class="detail-section-title">${type === "tv" ? "Episodes" : "Downloads"}</div><button class="quick-btn secondary">Refresh</button></div><div class="download-results" aria-live="polite"></div>`;
   const button = host.querySelector("button");
   const results = host.querySelector(".download-results");
+  let timer;
   const refresh = async () => {
+    clearTimeout(timer);
+    if (!host.isConnected) return;
+    const expanded = [...results.querySelectorAll("details[open]")].map(el => `${el.getAttribute("data-library")}:${el.getAttribute("data-season")}`);
     button.disabled = true;
     results.textContent = type === "tv" ? "Loading episodes…" : "Checking downloads…";
     try {
@@ -44,6 +53,35 @@ export function mountDownloads(type, id) {
       if (!data.configured) { results.textContent = "Library status is not configured."; return; }
       if (type === "tv") {
         results.innerHTML = renderEpisodes(data, id);
+        results.querySelectorAll("details").forEach(el => {
+          if (expanded.includes(`${el.getAttribute("data-library")}:${el.getAttribute("data-season")}`)) el.setAttribute("open", "");
+        });
+        results.querySelectorAll("[data-recover-season]").forEach(element => {
+          const action = /** @type {HTMLButtonElement} */ (element);
+          action.onclick = async () => {
+            const season = Number(action.dataset.recoverSeason);
+            const episodeId = action.dataset.recoverEpisode ? Number(action.dataset.recoverEpisode) : undefined;
+            if (!confirm(episodeId ? `Download ${action.dataset.episodeLabel}? This restores monitoring and searches for this episode only. Normal automatic cleanup still applies.` : `Resume downloads for ${action.dataset.count} missing aired episodes in ${season === 0 ? "Specials" : `Season ${season}`}? This restores monitoring and starts a search. Downloads are shared with everyone. Normal automatic cleanup still applies.`)) return;
+            clearTimeout(timer);
+            action.disabled = true;
+            const output = action.parentElement.querySelector(".recovery-result");
+            output.textContent = "Restoring monitoring and starting search…";
+            try {
+              const response = await apiPost("/api/downloads/recover-season", { instance: action.dataset.instance, tmdbId: id, season, ...(episodeId === undefined ? {} : { episodeId }), confirmed: true });
+              if (response.error) throw new Error(response.error);
+              output.textContent = response.message;
+              timer = setTimeout(() => {
+                if (!results.querySelector(".release-options:not(:empty)")) void refresh();
+              }, 8000);
+            } catch (error) {
+              output.textContent = error.message;
+              action.disabled = false;
+            }
+          };
+        });
+        if (data.libraries?.some(l => l.searches?.some(s => ["queued", "started"].includes(s.status)) || l.episodes.some(e => ["downloading", "queued", "paused", "importing", "attention", "failed"].includes(e.state)))) timer = setTimeout(() => {
+                if (!results.querySelector(".release-options:not(:empty)")) void refresh();
+              }, 8000);
         results.querySelectorAll("[data-episode]").forEach(element => {
           const searchButton = /** @type {HTMLButtonElement} */ (element);
           const d = searchButton.dataset;
