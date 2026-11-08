@@ -52,7 +52,8 @@ export type ReportNotice = {
     | "notes"
     | "status"
   >;
-  event: "created" | "existing" | "updated" | "reopened" | "resolved";
+  event: "created" | "existing" | "updated" | "reopened" | "resolved" | "replacement";
+  audience?: "admin" | "reporter";
   actor: number;
   message: string;
   at: string;
@@ -85,6 +86,7 @@ function notice(
   event: ReportNotice["event"],
   actor: number,
   message = "",
+  audience: "admin" | "reporter" = "admin",
 ): ReportNotice {
   const {
     id,
@@ -117,6 +119,7 @@ function notice(
       status,
     },
     event,
+    audience,
     actor,
     message,
     at: new Date().toISOString(),
@@ -130,6 +133,20 @@ function notificationQueue(data: Data): ReportNotice[] {
     .filter((r) => r.status !== "resolved")
     .map((r) => notice(r, "existing", r.owner));
   return data.reportNotifications;
+}
+function queueReporterNotice(
+  data: Data,
+  report: Report,
+  event: ReportNotice["event"],
+  actor: number,
+  message = "",
+): void {
+  const queue = notificationQueue(data);
+  // A later result supersedes a queued older result for this report.
+  for (let i = queue.length - 1; i >= 0; i--) {
+    if (queue[i]?.audience === "reporter" && queue[i]?.report.id === report.id) queue.splice(i, 1);
+  }
+  queue.push(notice(report, event, actor, message, "reporter"));
 }
 export function pendingReportNotifications(now = Date.now()): ReportNotice[] {
   const data = read();
@@ -208,7 +225,11 @@ export function updateReport(
     actor,
     message:
       message ||
-      (status === "resolved" ? "Playback confirmed working" : status.replaceAll("_", " ")),
+      (status === "resolved"
+        ? actor === report.owner
+          ? "Playback confirmed working"
+          : "Admin marked this report resolved. Please try playback again."
+        : status.replaceAll("_", " ")),
   });
   report.history = report.history.slice(-50);
   if (actor !== config.ADMIN_USER_ID)
@@ -224,6 +245,20 @@ export function updateReport(
         message,
       ),
     );
+  if (
+    actor === config.ADMIN_USER_ID &&
+    actor !== report.owner &&
+    previousStatus !== status &&
+    (status === "resolved" || status === "replacement_available")
+  ) {
+    queueReporterNotice(
+      data,
+      report,
+      status === "resolved" ? "resolved" : "replacement",
+      actor,
+      message,
+    );
+  }
   write(data);
   return report;
 }
@@ -249,6 +284,7 @@ export function markReplacement(
       )
     )
       continue;
+    notificationQueue(data);
     // Remember observed files so reopening a failed repair waits for another import.
     r.fileIds = [...new Set([...r.fileIds, ...fileIds])];
     r.status = "replacement_available";
@@ -258,6 +294,8 @@ export function markReplacement(
       actor: 0,
       message: "A different file is imported. Try playback and confirm whether it works.",
     });
+    r.history = r.history.slice(-50);
+    queueReporterNotice(data, r, "replacement", 0);
     changed = true;
   }
   if (changed) write(data);

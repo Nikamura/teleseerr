@@ -260,12 +260,20 @@ loses the report. Pending alerts survive restarts and retry with backoff from
 updates do not create another alert. Delivery is at least once: a crash after
 Telegram accepts a message but before local acknowledgement can repeat it.
 On first upgrade, existing unresolved reports are forwarded once; resolved
-history is not replayed. This notifies the admin only, not other users.
+history is not replayed. Admin resolution and replacement-available changes
+notify only the linked report owner. The automatic imported-file checker also
+notifies that owner when a different file is ready, asking them to test it;
+it does not mark playback fixed. Confirming their own fix does not echo a message
+back to the user. Newer outcomes replace older queued owner updates; obsolete
+states and unlinked recipients are skipped. Old queued admin alerts retain their
+original destination. Historical resolved reports are not replayed to users.
 
 Admins can investigate and post updates. Reports remain open until explicitly
 resolved. A periodic two-minute checker notices newly imported file identities
 and labels them **replacement available**, asking the user to test playback.
-Updates are visible in the app; this does not send extra Telegram messages.
+Updates remain visible in the app. A replacement report offers **Works now**
+and **Still broken — keep open**. Reopening remembers already-tried file IDs so
+the same imported file does not trigger another replacement alert.
 
 Manage downloads permits release search/replacement, targeted automatic import
 retry, and torrent priority. It is independent of Seerr request approvals and

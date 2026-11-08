@@ -55,3 +55,57 @@ test("migration forwards unresolved reports once, and messages stay under Telegr
  const message = reportMessage({ ...pending[0]!, message: "x".repeat(5000), report: { ...pending[0]!.report, title: "x".repeat(5000), notes: "x".repeat(5000) } });
  assert.ok(message.length <= 4000); assert.ok(message.includes(pending[0]!.report.id));
 });
+
+test("admin resolution notifies only the report owner with the admin's note, without duplicate or identity leaks", async () => {
+ const s = await import("../src/support-store.js"), n = await import("../src/support-notifications.js");
+ const sent: any[] = [], bot = { api: { sendMessage: async (...args: any[]) => { sent.push(args); } } } as unknown as Bot;
+ const r=s.createReport({...input,tmdbId:700}); await n.flushReportNotifications(bot); sent.length=0;
+ s.updateReport(r.id,1,true,"resolved","Replaced the broken file. Please try again.");
+ s.updateReport(r.id,1,true,"resolved","");
+ assert.equal(s.pendingReportNotifications().length,1); assert.equal(s.pendingReportNotifications()[0]!.audience,"reporter");
+ await n.flushReportNotifications(bot); assert.equal(sent.length,1); assert.equal(sent[0][0],42);
+ assert.match(sent[0][1],/marked resolved/); assert.match(sent[0][1],/Replaced the broken file/); assert.match(sent[0][1],/S06E16/);
+ assert.ok(!sent[0][1].includes("viewer")); assert.ok(!sent[0][1].includes("Telegram 42"));
+ assert.equal(sent[0][2].reply_markup.inline_keyboard[0][0].web_app.url,"https://teleseerr.invalid/tv/700");
+});
+
+test("a replacement alerts the owner once and remains unconfirmed; a still-broken file does not alert again", async () => {
+ const s=await import("../src/support-store.js"), n=await import("../src/support-notifications.js");
+ const sent:any[]=[];const bot={api:{sendMessage:async(...args:any[])=>{sent.push(args);}}} as unknown as Bot;
+ const r=s.createReport({...input,tmdbId:701,fileIds:["sonarr:1"]});await n.flushReportNotifications(bot);sent.length=0;
+ s.markReplacement(42,"tv",701,616,["sonarr:1"]);assert.equal(s.pendingReportNotifications().length,0);
+ s.markReplacement(42,"tv",701,616,["sonarr:2"]);s.markReplacement(42,"tv",701,616,["sonarr:2"]);
+ assert.equal(s.pendingReportNotifications().length,1);await n.flushReportNotifications(bot);
+ assert.equal(sent.length,1);assert.equal(sent[0][0],42);assert.match(sent[0][1],/replacement file is ready/);assert.ok(!sent[0][1].includes("marked resolved"));
+ assert.equal(s.reports(42).find(x=>x.id===r.id)!.status,"replacement_available");
+ s.updateReport(r.id,42,false,"open","");s.markReplacement(42,"tv",701,616,["sonarr:2"]);
+ assert.ok(s.pendingReportNotifications().every(x=>x.audience!=="reporter"));await n.flushReportNotifications(bot);
+ sent.length=0;s.updateReport(r.id,42,false,"resolved","");await n.flushReportNotifications(bot);
+ assert.deepEqual(sent.map(x=>x[0]),[1]); // User confirmation alerts admin, not an echo to the user.
+});
+
+test("a newer resolution supersedes a pending replacement, retries persist the owner, and stale or revoked notices are dropped", async () => {
+ const s=await import("../src/support-store.js"), n=await import("../src/support-notifications.js");
+ const sent:any[]=[];const bot={api:{sendMessage:async(...args:any[])=>{sent.push(args);}}} as unknown as Bot;
+ const r=s.createReport({...input,tmdbId:702});await n.flushReportNotifications(bot);
+ s.markReplacement(42,"tv",702,616,["sonarr:99"]);s.updateReport(r.id,1,true,"resolved","Fixed");
+ assert.equal(s.pendingReportNotifications().length,1);assert.equal(s.pendingReportNotifications()[0]!.event,"resolved");
+ await n.flushReportNotifications({api:{sendMessage:async()=>{throw Error("offline")}}} as unknown as Bot);
+ const persisted=JSON.parse(readFileSync(join(dir,"support.json"),"utf8")).reportNotifications;
+ assert.equal(persisted[0].audience,"reporter");assert.equal(persisted[0].report.owner,42);
+ sent.length=0;await n.flushReportNotifications(bot,Date.now()+3600001);assert.deepEqual(sent.map(x=>x[0]),[42]);
+ s.updateReport(r.id,42,false,"open","");await n.flushReportNotifications(bot);
+ s.markReplacement(42,"tv",702,616,["sonarr:100"]);s.updateReport(r.id,42,false,"open","");sent.length=0;
+ await n.flushReportNotifications(bot);assert.ok(sent.every(x=>x[0]!==42));
+ const revoked=s.createReport({...input,owner:43,tmdbId:703});await n.flushReportNotifications(bot);s.updateReport(revoked.id,1,true,"resolved","");sent.length=0;
+ await n.flushReportNotifications(bot);assert.equal(sent.length,0);assert.equal(s.pendingReportNotifications().length,0);
+});
+
+test("legacy queued notices without an audience still go to the admin", async () => {
+ const s=await import("../src/support-store.js"), n=await import("../src/support-notifications.js");
+ s.createReport({...input,tmdbId:704});const path=join(dir,"support.json"),data=JSON.parse(readFileSync(path,"utf8"));
+ for(const notice of data.reportNotifications)delete notice.audience;
+ writeFileSync(path,JSON.stringify(data));const recipients:number[]=[];
+ await n.flushReportNotifications({api:{sendMessage:async(id:number)=>{recipients.push(id);}}} as unknown as Bot);
+ assert.deepEqual(recipients,[1]);
+});

@@ -4,6 +4,7 @@ import { config } from "./config.js";
 import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
 import {
+  reports,
   pendingReportNotifications,
   completeReportNotification,
   retryReportNotification,
@@ -28,6 +29,27 @@ function identity(id: number): string {
 }
 export function reportMessage(item: ReportNotice): string {
   const r = item.report;
+  if (item.audience === "reporter") {
+    const episode =
+      r.season !== undefined && r.episode !== undefined
+        ? ` · S${String(r.season).padStart(2, "0")}E${String(r.episode).padStart(2, "0")}`
+        : "";
+    return [
+      item.event === "replacement"
+        ? "📺 A replacement file is ready to try"
+        : "✅ Your problem report was marked resolved",
+      "",
+      clip(r.title ?? `TMDB ${r.tmdbId}`, 300) + episode,
+      `Problem: ${categories[r.category] ?? clip(r.category, 100)}`,
+      "",
+      item.event === "replacement"
+        ? "Try playback again, then choose Works now or Still broken under Requests → Problems. A new file does not confirm playback works on your device."
+        : "An administrator marked your report resolved. Please try playback again. If it still fails, reopen it under Requests → Problems.",
+      ...(item.message ? ["", `Admin update: ${clip(item.message, 1000)}`] : []),
+      "",
+      `Report: ${r.id}`,
+    ].join("\n");
+  }
   const heading =
     item.event === "created"
       ? "🚩 New problem report"
@@ -66,6 +88,18 @@ export async function flushReportNotifications(bot = reportBot, now = Date.now()
   try {
     for (const item of pendingReportNotifications(now)) {
       try {
+        const reporter = item.audience === "reporter";
+        if (reporter) {
+          const current = reports(item.report.owner).find((r) => r.id === item.report.id);
+          if (
+            (!accountStore.get(item.report.owner) && item.report.owner !== config.ADMIN_USER_ID) ||
+            current?.status !== item.report.status
+          ) {
+            completeReportNotification(item.id);
+            continue;
+          }
+        }
+        const recipient = reporter ? item.report.owner : config.ADMIN_USER_ID;
         const keyboard = config.MINI_APP_URL
           ? new InlineKeyboard()
               .webApp(
@@ -76,14 +110,14 @@ export async function flushReportNotifications(bot = reportBot, now = Date.now()
               .webApp("Requests & reports", new URL("/requests", config.MINI_APP_URL).href)
           : undefined;
         // Plain text: submitted notes cannot inject Telegram formatting or hidden links.
-        await bot.api.sendMessage(config.ADMIN_USER_ID, reportMessage(item), {
+        await bot.api.sendMessage(recipient, reportMessage(item), {
           link_preview_options: { is_disabled: true },
           ...(keyboard ? { reply_markup: keyboard } : {}),
         });
         completeReportNotification(item.id);
         log.info(
           { reportId: item.report.id, noticeId: item.id },
-          "Problem report delivered to admin Telegram",
+          "Problem report notification delivered to Telegram",
         );
       } catch {
         retryReportNotification(item.id);

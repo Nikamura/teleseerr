@@ -57,7 +57,7 @@ the process—**Available** means the episode has reached the library.
 
 ## Won’t play? Wrong audio?
 
-Open a title or episode and tap **Having trouble?**. Check the file’s tracks and download state, find another release, or send a report with your device and error. The admin receives it on Telegram. Find your reports under **Requests → Problems**; tap **Works now** after testing playback.
+Open a title or episode and tap **Having trouble?**. Check the file’s tracks and download state, find another release, or send a report with your device and error. The admin receives it on Telegram. You’ll get a Telegram update when it’s marked resolved or a replacement is ready to try. Find your reports under **Requests → Problems**; tap **Works now** after testing playback.
 
 Download changes need **Manage downloads**, granted by your admin in **People**. Reports and pending-request changes are available to linked users. Optional integrations provide cleanup and Plex details; unavailable services are labelled clearly.
 

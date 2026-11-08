@@ -1,3 +1,4 @@
+import { wakeReportNotifications } from "./support-notifications.js";
 import { getInstances } from "./arr/client.js";
 import { arr, findSeries, type Episode } from "./routes/downloads.js";
 import { reports, markReplacement } from "./support-store.js";
@@ -54,6 +55,7 @@ export async function checkReports(): Promise<void> {
     }
   } finally {
     running = false;
+    wakeReportNotifications();
   }
 }
 export function startSupportWatch(): void {
