@@ -175,8 +175,8 @@ body[data-screen="detail"] .search-bar { display: none; }
   body .top-bar .masthead { margin-bottom: 0; }
   .discovery-intro h1 { font-size: 38px; }
   .discovery-intro p { font-size: 16px; }
-  .search-bar { max-width: 560px; }
-  .browse-tabs { max-width: 560px; }
+  .search-bar { width: 100%; max-width: none; }
+  .browse-tabs { width: 100%; max-width: none; }
   .spotlight, .spotlight-placeholder { height: 330px; }
   .spotlight-title { font-size: 38px; }
   .spotlight-copy { bottom: 28px; left: 30px; }
