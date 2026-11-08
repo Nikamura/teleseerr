@@ -349,14 +349,25 @@ html, body {
   padding: 8px 16px 16px;
 }
 
-.download-progress-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--muted-foreground);
-  margin-bottom: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.download-progress-summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 4px 0;
 }
+
+.download-progress-summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+  border-radius: var(--radius);
+}
+
+.download-progress-heading { font-size: 13px; font-weight: 600; }
+.download-progress-counts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12px; }
+.download-summary-status { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.download-summary-active { color: var(--link); }
+.download-summary-available { color: #86efac; }
+.download-summary-attention { color: #fcd34d; }
+.download-progress-body { padding-top: 12px; }
 
 .download-item {
   margin-bottom: 12px;
@@ -1737,3 +1748,14 @@ html, body {
 .download-status-available { color: #86efac; }
 .download-status-importing { color: var(--link); }
 .download-status-failed, .download-status-stalled { color: #fcd34d; }
+
+/* Unified season requests and episode recovery */
+.season-request-controls { margin: 10px 0 14px; }
+.season-actions:has(:not(:empty)) { padding: 12px; }
+.season-actions:empty { display: none; }
+.season-empty, .episode-intent { color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+.season-empty { margin-top: 8px; }
+.season-actions .season-btn { min-height: 44px; }
+.season-recovery { padding: 0 12px 12px; }
+.season-recovery p:empty { display: none; }
+.library-status-error { color: var(--muted-foreground); font-size: 13px; margin: 12px 0; }

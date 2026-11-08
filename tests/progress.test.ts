@@ -92,6 +92,10 @@ test("progress rendering removes finished bars and ETA, including mixed season p
   });
   for (const text of ["✓ Available", "Preparing for playback", "Needs attention", "S06E03"])
     assert.ok(html.includes(text));
+  assert.ok(html.startsWith('<details class="download-progress">'), "collapsed by default");
+  const summary = html.slice(0, html.indexOf("</summary>"));
+  for (const text of ["1 available", "1 preparing", "1 need attention"]) assert.ok(summary.includes(text));
+  assert.ok(summary.includes('aria-hidden="true"'), "decorative icons accompany text labels");
   assert.equal(html.includes("100%"), false);
   assert.equal(html.includes("ETA:"), false);
   assert.equal(html.includes("download-bar-track"), false);

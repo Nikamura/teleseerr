@@ -20,8 +20,19 @@ import { renderSliderCard, renderGrid } from "./grid.js";
 function renderProgressSection(progress, type) {
   if (!progress.available || progress.items.length === 0) return "";
 
-  let html = '<div class="download-progress">';
-  html += '<div class="download-progress-title">Download Progress</div>';
+  const groups = [
+    { states: ["downloading"], icon: "↓", label: "downloading", tone: "active" },
+    { states: ["queued"], icon: "◷", label: "queued", tone: "active" },
+    { states: ["importing"], icon: "⌛", label: "preparing", tone: "active" },
+    { states: ["available"], icon: "✓", label: "available", tone: "available" },
+    { states: ["paused"], icon: "Ⅱ", label: "paused", tone: "attention" },
+    { states: ["failed", "stalled"], icon: "!", label: "need attention", tone: "attention" },
+  ];
+  const counts = groups.map(group => {
+    const count = progress.items.filter(item => group.states.includes(item.status)).length;
+    return count ? `<span class="download-summary-status download-summary-${group.tone}"><span aria-hidden="true">${group.icon}</span> ${count} ${group.label}</span>` : "";
+  }).join("");
+  let html = `<details class="download-progress"><summary class="download-progress-summary"><span class="download-progress-heading">Download progress</span><span class="download-progress-counts">${counts}</span></summary><div class="download-progress-body">`;
 
   if (progress.isSeasonPack) html += '<div class="download-note">Season pack</div>';
   for (const item of progress.items) {
@@ -42,7 +53,7 @@ function renderProgressSection(progress, type) {
     </div>`;
   }
 
-  html += "</div>";
+  html += "</div></details>";
   return html;
 }
 
@@ -70,7 +81,10 @@ function startProgressPolling(type, tmdbId, tvdbId) {
         clearProgressPolling();
         return;
       }
+      const wasOpen = el.querySelector("details")?.open ?? false;
       el.innerHTML = renderProgressSection(progress, type);
+      const details = el.querySelector("details");
+      if (details) details.open = wasOpen;
     } catch {
       // Progress is supplementary — fail silently
     }
@@ -264,13 +278,16 @@ export function renderDetail(type, d) {
       }, caps.has4kMovie);
     }
   } else {
-    html += renderSeasonPicker(d);
     view.innerHTML = html;
-    attachSeasonHandlers(d, view);
     updateTvRequestBar(d);
   }
 
-  mountDownloads(type, d.id);
+  mountDownloads(type, d.id, type === "tv" ? {
+    show: d,
+    seasonState: getSeasonState,
+    renderControls: renderSeasonControls,
+    onRender: (host) => attachSeasonHandlers(d, host),
+  } : undefined);
   document.getElementById("back-btn").onclick = goBack;
 
   // Attach cast card click handlers
@@ -394,38 +411,15 @@ export function goBack() {
  * @param {any} show
  * @returns {string}
  */
-export function renderSeasonPicker(show) {
+export function renderSeasonControls(show) {
   const seasons = show.seasons ?? [];
   const today = new Date().toISOString().slice(0, 10);
 
-  let html = '<div class="season-picker"><h3>Pick yer seasons</h3><div class="season-grid">';
-
-  for (const s of seasons) {
-    if (s.seasonNumber === 0) continue;
-
-    const sStatus = getSeasonState(show, s);
-    let cls = "season-btn";
-    let label = `S${s.seasonNumber}`;
-
-    if (sStatus === "available") {
-      cls += " available";
-      label += " &#9989;";
-    } else if (sStatus === "partial") {
-      cls += " partial";
-      label += " &#128993;";
-    } else if (sStatus === "pending" || sStatus === "approved") {
-      cls += " pending";
-      label += " &#9203;";
-    }
-
-    html += `<button class="${cls}" data-season="${s.seasonNumber}" data-state="${sStatus}">${label}</button>`;
-  }
-
-  html += '</div><div class="quick-actions">';
+  let html = '<div class="quick-actions season-request-controls">';
 
   const requestable = seasons.filter((s) => s.seasonNumber !== 0 && getSeasonState(show, s) === "requestable");
   if (requestable.length > 0) {
-    html += '<button class="quick-btn secondary" id="select-all">All Missing</button>';
+    html += '<button class="quick-btn secondary" id="select-all">Select unrequested seasons</button>';
 
     const future = requestable.filter((s) =>
       (s.airDate && s.airDate > today) || (!s.airDate && show.status === "Returning Series")
@@ -436,7 +430,7 @@ export function renderSeasonPicker(show) {
   }
 
   html += '<button class="quick-btn secondary" id="clear-selection" style="display:none">Clear</button>';
-  html += "</div></div>";
+  html += "</div>";
 
   return html;
 }
@@ -452,9 +446,9 @@ export function getSeasonState(show, season) {
   if (mSeason?.status === 4) return "partial";
 
   const req = show.mediaInfo?.requests ?? [];
-  const approved = req.find((r) => r.status === 2 && r.seasons?.some((rs) => rs.seasonNumber === season.seasonNumber));
+  const approved = req.find((r) => !r.is4k && r.status === 2 && r.seasons?.some((rs) => rs.seasonNumber === season.seasonNumber));
   if (approved) return "approved";
-  const pending = req.find((r) => r.status === 1 && r.seasons?.some((rs) => rs.seasonNumber === season.seasonNumber));
+  const pending = req.find((r) => !r.is4k && r.status === 1 && r.seasons?.some((rs) => rs.seasonNumber === season.seasonNumber));
   if (pending) return "pending";
 
   return "requestable";
@@ -466,64 +460,40 @@ export function getSeasonState(show, season) {
  * @returns {void}
  */
 export function attachSeasonHandlers(show, view) {
-  const selectedSeasons = getSelectedSeasons();
-
-  view.querySelectorAll(".season-btn").forEach((btn) => {
-    if (/** @type {HTMLElement} */ (btn).dataset.state !== "requestable") return;
+  const selected = getSelectedSeasons();
+  const buttons = [...view.querySelectorAll('.season-btn[data-state="requestable"]')];
+  const selectable = new Set(buttons.map(btn => Number(/** @type {HTMLElement} */ (btn).dataset.season)));
+  for (const season of selected) if (!selectable.has(season)) selected.delete(season);
+  const sync = () => {
+    buttons.forEach(btn => {
+      const season = Number(/** @type {HTMLElement} */ (btn).dataset.season);
+      btn.classList.toggle("selected", selected.has(season));
+      btn.setAttribute("aria-pressed", String(selected.has(season)));
+      btn.textContent = `${selected.has(season) ? "✓ Selected season" : "Select season"} ${season}`;
+    });
+    updateTvRequestBar(show);
+    updateClearBtn();
+  };
+  buttons.forEach(btn => {
     /** @type {HTMLElement} */ (btn).onclick = () => {
-      const sn = Number(/** @type {HTMLElement} */ (btn).dataset.season);
-      if (selectedSeasons.has(sn)) {
-        selectedSeasons.delete(sn);
-        btn.classList.remove("selected");
-      } else {
-        selectedSeasons.add(sn);
-        btn.classList.add("selected");
-      }
-      updateTvRequestBar(show);
-      updateClearBtn();
+      const season = Number(/** @type {HTMLElement} */ (btn).dataset.season);
+      if (selected.has(season)) selected.delete(season); else selected.add(season);
+      sync();
     };
   });
-
-  const selectAllBtn = document.getElementById("select-all");
-  if (selectAllBtn) {
-    selectAllBtn.onclick = () => {
-      view.querySelectorAll('.season-btn[data-state="requestable"]').forEach((btn) => {
-        selectedSeasons.add(Number(/** @type {HTMLElement} */ (btn).dataset.season));
-        btn.classList.add("selected");
-      });
-      updateTvRequestBar(show);
-      updateClearBtn();
-    };
-  }
-
-  const selectNewBtn = document.getElementById("select-new");
-  if (selectNewBtn) {
+  const all = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-all"));
+  if (all) all.onclick = () => { selectable.forEach(season => selected.add(season)); sync(); };
+  const upcoming = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-new"));
+  if (upcoming) upcoming.onclick = () => {
     const today = new Date().toISOString().slice(0, 10);
-    selectNewBtn.onclick = () => {
-      for (const s of show.seasons) {
-        if (s.seasonNumber === 0) continue;
-        if (getSeasonState(show, s) !== "requestable") continue;
-        const isFuture = (s.airDate && s.airDate > today) || (!s.airDate && show.status === "Returning Series");
-        if (isFuture) {
-          selectedSeasons.add(s.seasonNumber);
-          const btn = view.querySelector(`.season-btn[data-season="${s.seasonNumber}"]`);
-          if (btn) btn.classList.add("selected");
-        }
-      }
-      updateTvRequestBar(show);
-      updateClearBtn();
-    };
-  }
-
-  const clearBtn = document.getElementById("clear-selection");
-  if (clearBtn) {
-    clearBtn.onclick = () => {
-      selectedSeasons.clear();
-      view.querySelectorAll(".season-btn.selected").forEach((b) => b.classList.remove("selected"));
-      updateTvRequestBar(show);
-      updateClearBtn();
-    };
-  }
+    for (const season of show.seasons ?? []) {
+      if (selectable.has(season.seasonNumber) && ((season.airDate && season.airDate > today) || (!season.airDate && show.status === "Returning Series"))) selected.add(season.seasonNumber);
+    }
+    sync();
+  };
+  const clear = /** @type {HTMLButtonElement | null} */ (view.querySelector("#clear-selection"));
+  if (clear) clear.onclick = () => { selected.clear(); sync(); };
+  sync();
 }
 
 /** @returns {void} */
@@ -548,7 +518,8 @@ export function updateTvRequestBar(show) {
   const sorted = [...selectedSeasons].sort((a, b) => a - b);
   const label = sorted.map((n) => `S${n}`).join(", ");
 
-  showRequestBar(`Plunder ${label}`, async () => {
+  const was4k = /** @type {HTMLInputElement | null} */ (document.getElementById("request-4k-cb"))?.checked ?? false;
+  showRequestBar(`Request ${label}`, async () => {
     showLoading();
     const result = await apiPost("/api/request", {
       mediaType: "tv",
@@ -566,6 +537,8 @@ export function updateTvRequestBar(show) {
       toast(formatError(result.error));
     }
   }, caps.has4kTv);
+  const checkbox = /** @type {HTMLInputElement | null} */ (document.getElementById("request-4k-cb"));
+  if (checkbox) checkbox.checked = was4k;
 }
 
 // ── Person View ─────────────────────────────

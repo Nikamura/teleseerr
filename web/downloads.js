@@ -6,16 +6,26 @@ const episodeLabels = {
   failed: "Download failed", attention: "Needs attention",
 };
 
-/** @param {any} data @param {number} tmdbId @returns {string} */
-function renderEpisodes(data, tmdbId) {
-  if (!data.libraries?.some(l => l.inLibrary)) return '<p>No episode records found in the connected library.</p>';
-  return data.libraries.filter(l => l.inLibrary).map(library => {
+/** @param {any} show @param {number} season @param {boolean} [is4k] @returns {{label:string, active:boolean}} */
+function seasonRequestStatus(show, season, is4k = false) {
+  const requests = (show?.mediaInfo?.requests ?? []).filter(r => !!r.is4k === is4k && r.seasons?.some(s => s.seasonNumber === season));
+  if (requests.some(r => r.status === 2)) return { label: "Requested · approved", active: true };
+  if (requests.some(r => r.status === 1)) return { label: "Awaiting approval", active: true };
+  if (requests.some(r => r.status === 4)) return { label: "Request failed", active: false };
+  if (requests.some(r => r.status === 3)) return { label: "Request declined", active: false };
+  return { label: "No active season request", active: false };
+}
+
+/** @param {any} data @param {number} tmdbId @param {any} [options] @returns {string} */
+function renderEpisodes(data, tmdbId, options = {}) {
+  const libraries = data.libraries?.filter(l => l.inLibrary) ?? [];
+  if (!libraries.length) libraries.push({ instance: "", episodes: [], searches: [] });
+  return libraries.map(library => {
     const episodes = library.episodes;
-    if (!episodes.length) return '<p>Episode information is not available yet.</p>';
     const available = episodes.filter(e => e.state === "available").length;
     const missing = episodes.filter(e => e.state === "missing").length;
-    const seasons = [...new Set(episodes.map(e => e.season))];
-    return `<p class="episode-overview"><strong>${available} of ${episodes.length} episodes available</strong>${missing ? ` · ${missing} missing` : ""}${data.libraries.length > 1 ? ` · ${escHtml(library.instance)}` : ""}</p>` + seasons.map(season => {
+    const seasons = [...new Set([...(options.show?.seasons ?? []).filter(s => s.seasonNumber !== 0).map(s => s.seasonNumber), ...episodes.map(e => e.season)])].sort((a,b) => a-b);
+    return (episodes.length ? `<p class="episode-overview"><strong>${available} of ${episodes.length} episodes available</strong>${missing ? ` · ${missing} missing` : ""}${data.libraries.length > 1 ? ` · ${escHtml(library.instance)}` : ""}</p>` : "") + seasons.map(season => {
       const group = episodes.filter(e => e.season === season);
       const ready = group.filter(e => e.state === "available").length;
       const missing = group.filter(e => e.state === "missing");
@@ -23,8 +33,13 @@ function renderEpisodes(data, tmdbId) {
       const transferring = group.filter(e => ["downloading", "queued", "importing"].includes(e.state)).length;
       const upcoming = group.filter(e => e.state === "unaired").length;
       const unknown = group.filter(e => e.state === "unknown").length;
-      const complete = ready === group.length;
-      const badges = `<span class="season-status season-status-${complete ? "complete" : "available"}">${complete ? "✓ " : ""}${ready}/${group.length} ${complete ? "complete" : "available"}</span>` +
+      const complete = group.length > 0 && ready === group.length;
+      const request = seasonRequestStatus(options.show, season, library.instance?.includes("4k"));
+      const metadata = options.show?.seasons?.find(s => s.seasonNumber === season);
+      const selectable = !library.instance?.includes("4k") && !complete && season !== 0 && metadata && options.seasonState?.(options.show, metadata) === "requestable";
+      const requestAction = selectable ? `<button class="season-btn" data-state="requestable" data-season="${season}" aria-pressed="false">Request season ${season}</button>` : "";
+      const episodeNote = !group.length ? '<p class="season-empty">Episode details will appear here when the show is in the connected download library. Use the season selection here to request missing seasons.</p>' : "";
+      const badges = (group.length ? `<span class="season-status season-status-${complete ? "complete" : "available"}">${complete ? "✓ " : ""}${ready}/${group.length} ${complete ? "complete" : "available"}</span>` : metadata?.episodeCount ? `<span class="season-status season-status-available">${metadata.episodeCount} episodes</span>` : "") +
         (missing.length ? `<span class="season-status season-status-missing">${missing.length} missing</span>` : "") +
         (attention ? `<span class="season-status season-status-missing">${attention} need attention</span>` : "") +
         (transferring ? `<span class="season-status season-status-downloading">${transferring} downloading / queued</span>` : "") +
@@ -33,22 +48,27 @@ function renderEpisodes(data, tmdbId) {
       const unmonitored = missing.filter(e => !e.monitored).length;
       const search = library.searches?.find(s => s.season === season);
       const searching = search && ["queued", "started"].includes(search.status);
-      const recovery = `<div class="season-recovery">${missing.length ? `<p>${missing.length} missing${unmonitored ? ` · ${unmonitored} not monitored` : ""}</p>` : ""}${searching ? '<p role="status">Searching for requested episodes…</p>' : search?.status === "failed" ? '<p>Search failed. Refresh or try again.</p>' : search?.status === "completed" && missing.length ? '<p>Search finished. Some episodes still need a suitable release.</p>' : ""}${data.canManage && missing.length && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-count="${missing.length}" data-instance="${escHtml(library.instance)}">Download missing episodes</button>` : ""}<p class="recovery-result" role="status"></p></div>`;
-      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span class="season-statuses">${badges}</span></summary>${recovery}<div class="episode-list">` + group.map(ep => {
+      const recovery = `<div class="season-recovery">${!data.canManage && missing.length ? '<p class="episode-intent">Episode downloads need download-management access from your admin.</p>' : ""}${missing.length ? `<p>${missing.length} missing${unmonitored ? ` · ${unmonitored} not monitored` : ""}</p>` : ""}${searching ? '<p role="status">Searching for requested episodes…</p>' : search?.status === "failed" ? '<p>Search failed. Refresh or try again.</p>' : search?.status === "completed" && missing.length ? '<p>Search finished. Some episodes still need a suitable release.</p>' : ""}${data.canManage && missing.length && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-count="${missing.length}" data-instance="${escHtml(library.instance)}">Download missing episodes</button>` : ""}<p class="recovery-result" role="status"></p></div>`;
+      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span class="season-statuses"><span class="season-status ${request.active ? "season-status-downloading" : "season-status-available"}">${request.label}</span>${badges}</span></summary><div class="season-actions">${requestAction}${episodeNote}</div>${recovery}<div class="episode-list">` + group.map(ep => {
         const label = episodeLabels[ep.state] ?? "Status unknown";
+        const intent = ep.state === "missing" ? (request.active ? request.label : ep.monitored ? "Monitored for downloads" : "Not monitored for downloads") : "";
         const date = ep.airDate ? new Date(ep.airDate).toLocaleDateString(undefined, {year:"numeric",month:"short",day:"numeric"}) : "";
-        return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${!ep.monitored && ep.state === "missing" ? '<p>Not monitored for downloads.</p>' : ""}${data.canManage && ep.state === "missing" && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-recover-episode="${ep.id}" data-episode-label="S${String(season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}" data-count="1" data-instance="${escHtml(library.instance)}">Download episode</button><p class="recovery-result" role="status"></p>` : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<div class="release-options" aria-live="polite"></div></div>`;
+        return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${intent ? `<p class="episode-intent">${intent}</p>` : ""}${data.canManage && ep.state === "missing" && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-recover-episode="${ep.id}" data-episode-label="S${String(season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}" data-count="1" data-instance="${escHtml(library.instance)}">Download episode</button><p class="recovery-result" role="status"></p>` : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<div class="release-options" aria-live="polite"></div></div>`;
       }).join("") + '</div></details>';
     }).join("");
   }).join("");
 }
 
-/** @param {string} type @param {number} id */
-export function mountDownloads(type, id) {
+/** @param {string} type @param {number} id @param {any} [options] */
+export function mountDownloads(type, id, options = {}) {
   const host = document.getElementById("download-management");
   if (!host) return;
-  host.innerHTML = `<div class="episode-section-header"><div class="detail-section-title">${type === "tv" ? "Episodes" : "Downloads"}</div><button class="quick-btn secondary">Refresh</button></div><div class="download-results" aria-live="polite"></div>`;
-  const button = host.querySelector("button");
+  host.innerHTML = `<div class="episode-section-header"><div class="detail-section-title">${type === "tv" ? "Seasons & episodes" : "Downloads"}</div><button class="quick-btn secondary">Refresh</button></div><div class="download-results" aria-live="polite"></div>`;
+  if (type === "tv" && options.show) {
+    host.querySelector(".download-results").innerHTML = (options.renderControls?.(options.show) ?? "") + renderEpisodes({ libraries: [], canManage: false }, id, options);
+    options.onRender?.(host);
+  }
+  const button = /** @type {HTMLButtonElement} */ (host.querySelector(".episode-section-header button"));
   const results = host.querySelector(".download-results");
   let timer;
   const refresh = async () => {
@@ -56,14 +76,19 @@ export function mountDownloads(type, id) {
     if (!host.isConnected) return;
     const expanded = [...results.querySelectorAll("details[open]")].map(el => `${el.getAttribute("data-library")}:${el.getAttribute("data-season")}`);
     button.disabled = true;
-    results.textContent = type === "tv" ? "Loading episodes…" : "Checking downloads…";
+    if (type !== "tv") results.textContent = "Checking downloads…";
     try {
-      const data = await api(`/api/${type}/${id}/downloads`);
+      const [data, show] = await Promise.all([
+        api(`/api/${type}/${id}/downloads`),
+        type === "tv" && options.show ? api(`/api/tv/${id}`).catch(() => null) : Promise.resolve(null),
+      ]);
+      if (show && !show.error && show.id === id) Object.assign(options.show, show);
       if (data.error) throw new Error(data.error);
       if (!host.isConnected) return;
-      if (!data.configured) { results.textContent = "Library status is not configured."; return; }
+      if (!data.configured && type !== "tv") { results.textContent = "Library status is not configured."; return; }
       if (type === "tv") {
-        results.innerHTML = renderEpisodes(data, id);
+        results.innerHTML = (options.renderControls?.(options.show) ?? "") + renderEpisodes(data, id, options);
+        options.onRender?.(host);
         results.querySelectorAll("details").forEach(el => {
           if (expanded.includes(`${el.getAttribute("data-library")}:${el.getAttribute("data-season")}`)) el.setAttribute("open", "");
         });
@@ -105,7 +130,15 @@ export function mountDownloads(type, id) {
           searchButton.onclick = () => findAlternatives(data.items[Number(searchButton.dataset.target)], searchButton);
         });
       }
-    } catch (error) { results.textContent = error.message || "Library status temporarily unavailable. Try Refresh."; }
+    } catch (error) {
+      if (type === "tv" && options.show) {
+        const note = document.createElement("p");
+        note.className = "library-status-error";
+        note.textContent = "Library status unavailable. Request controls are still available; try Refresh for episode status.";
+        results.querySelector(".library-status-error")?.remove();
+        results.prepend(note);
+      } else results.textContent = error.message || "Library status temporarily unavailable. Try Refresh.";
+    }
     finally { button.disabled = false; }
   };
   button.onclick = refresh;

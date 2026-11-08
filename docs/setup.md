@@ -226,3 +226,17 @@ only that episode, including when it was previously unmonitored. This is direct
 Sonarr recovery for shows already in the connected library, not a Seerr request:
 it does not create a request record or use Seerr approval/quota tracking. Normal
 season requests still go through Seerr. Other missing episodes remain untouched.
+
+### Unified TV requests and episodes
+
+TV titles use one **Seasons & episodes** section. Each row separates the Seerr
+season request status (awaiting approval, approved request, failed/declined, or
+no active request) from actual episode availability. Expand a season to select
+it for the normal Seerr request flow or use permitted episode recovery actions.
+The duplicate season grid has been removed. Season selection still uses the
+request confirmation bar, including the existing 4K option. Standard and 4K
+request labels follow their respective library tiers.
+
+Season controls remain usable when direct Sonarr status is unconfigured or
+unavailable. Episode recovery still requires Manage downloads and a show already
+in Sonarr; monitoring alone is labelled as monitoring, not as a Seerr request.
