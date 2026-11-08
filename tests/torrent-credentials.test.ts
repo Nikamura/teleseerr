@@ -56,7 +56,7 @@ test("explicit torrent credentials bind to the exact configured client URL", asy
       assert.equal(body.get("password"), "host-secret");
       return new Response(null, {
         status: 204,
-        headers: { "set-cookie": "SID=private; HttpOnly" },
+        headers: { "set-cookie": "QBT_SID_443=private; HttpOnly" },
       });
     }
     return new Response(JSON.stringify([{ hash: item.downloadId, priority: 3 }]));

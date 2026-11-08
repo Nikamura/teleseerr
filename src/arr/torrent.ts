@@ -113,7 +113,12 @@ async function loginCookie(base: string, username: string, password: string): Pr
     });
     const cookie = response.headers.get("set-cookie")?.split(";")[0] ?? "";
     const accepted = response.status === 204 || (await response.text()).trim() === "Ok.";
-    if (!response.ok || !accepted || !/^SID=.+/.test(cookie))
+    const port = new URL(base).port || (new URL(base).protocol === "https:" ? "443" : "80");
+    const cookieName = cookie.slice(0, cookie.indexOf("="));
+    const hasSession =
+      (cookieName === "SID" || cookieName === `QBT_SID_${port}`) &&
+      cookie.length > cookieName.length + 1;
+    if (!response.ok || !accepted || !hasSession)
       throw new ClientError(502, "Torrent client login unavailable");
     return cookie;
   })();

@@ -106,3 +106,29 @@ test("redacted Arr passwords never trigger a bad login attempt", async () => {
   await assert.rejects(() => torrentClient(instance, item), /redacted/);
   assert.equal(logins, 0);
 });
+
+test("port-scoped session cookies from a different endpoint are rejected", async () => {
+  const { torrentClient } = await import("../src/arr/torrent.js");
+  globalThis.fetch = async (url) =>
+    String(url).includes("/auth/login")
+      ? new Response(null, {
+          status: 204,
+          headers: { "set-cookie": "QBT_SID_8080=private; HttpOnly" },
+        })
+      : new Response(
+          JSON.stringify([
+            {
+              id: 3,
+              enable: true,
+              implementation: "QBittorrent",
+              fields: [
+                { name: "host", value: "wrongport.invalid" },
+                { name: "port", value: 443 },
+                { name: "useSsl", value: true },
+                { name: "password", value: "actual-password" },
+              ],
+            },
+          ]),
+        );
+  await assert.rejects(() => torrentClient(instance, item), /login unavailable/);
+});
