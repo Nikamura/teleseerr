@@ -1,7 +1,6 @@
 import { navigate, routerReady, tabPath } from "./router.js";
-import { icon } from "./icons.js";
-import { api, escHtml, posterUrl, year, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
-import { addRailControls, renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore, openMedia } from "./grid.js";
+import { api, escHtml, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
+import { addRailControls, renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore } from "./grid.js";
 
 // ── Discover Page (Trending tab) ────────────
 
@@ -10,8 +9,6 @@ import { addRailControls, renderGrid, renderSkeletons, renderSliderCard, renderS
  * @returns {Promise<void>}
  */
 export async function loadDiscoverPage(view) {
-  view.innerHTML = '<div class="spinner" style="width:24px;height:24px;margin:40px auto"></div>';
-
   const sections = [
     { title: "Trending now", endpoint: "/api/trending?page=1", key: "trending" },
     { title: "Fresh in your library", endpoint: "/api/recently-added?page=1", key: "recently-added" },
@@ -21,7 +18,7 @@ export async function loadDiscoverPage(view) {
     { title: "Upcoming TV Shows", endpoint: "/api/discover/upcoming/tv?page=1", key: "upcoming-tv" },
   ];
 
-  view.innerHTML = '<div id="discover-spotlight" class="spotlight-placeholder skeleton" aria-label="Loading featured title"></div>';
+  view.replaceChildren();
 
   for (const section of sections) {
     const container = document.createElement("div");
@@ -55,30 +52,16 @@ export async function loadDiscoverSection(section, container) {
     row.innerHTML = "";
 
     if (items.length === 0) {
-      if (section.key === "trending") document.getElementById("discover-spotlight")?.remove();
       container.style.display = "none";
       return;
     }
 
-    if (section.key === "trending") {
-      let host = document.getElementById("discover-spotlight");
-      if (!host) { host=document.createElement("div"); host.id="discover-spotlight"; container.before(host); }
-      const featured = items.find(item => item.backdropPath) ?? items[0];
-      if (host && featured) {
-        host.className = "spotlight-host";
-        host.innerHTML = `<button class="spotlight" aria-label="View ${escHtml(featured.title ?? featured.name)}"><img src="${posterUrl(featured.backdropPath ?? featured.posterPath, "w1280")}" alt=""><span class="spotlight-scrim"></span><span class="spotlight-copy"><span class="spotlight-eyebrow">In the spotlight</span><span class="spotlight-title">${escHtml(featured.title ?? featured.name)}</span><span class="spotlight-meta">${year(featured.releaseDate ?? featured.firstAirDate)} · ${featured.mediaType === "tv" ? "TV series" : "Movie"}</span></span><span class="spotlight-open">${icon("arrow",24)}</span></button>`;
-        const image = host.querySelector("img");
-        image.onerror = () => { image.style.visibility = "hidden"; };
-        host.querySelector("button").onclick = () => openMedia(featured.mediaType, featured.id);
-      }
-    }
     for (const item of items) {
       row.appendChild(renderSliderCard(item));
     }
     addRailControls(container);
   } catch {
     if (!container.isConnected) return;
-    if (section.key === "trending") document.getElementById("discover-spotlight")?.remove();
     container.querySelector(".slider-row").innerHTML = '<div class="empty" role="status">This section is temporarily unavailable.<br><button class="quick-btn secondary" data-retry-section>Try again</button></div>';
     container.querySelector("[data-retry-section]").addEventListener("click",()=>loadDiscoverSection(section,container));
   }

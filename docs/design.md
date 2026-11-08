@@ -20,14 +20,14 @@ amber for readable links. Green and warning tones describe status, not arbitrary
 brand accents. Keep text labels alongside status colors and icons.
 
 Use 8px action corners, 10–12px artwork/inputs, 14–16px containers, and circles
-only for avatars, switches and the featured-title opener. Use the outline SVG
+only for avatars, switches and rail navigation. Use the outline SVG
 icons in `web/icons.js`; keep emoji out of interface chrome. Primary controls have a
 44px minimum interaction target. Reduced-motion settings disable decoration.
 
-The featured title is a real trending result and opens its details. It is not a
-playback control. Use upstream poster/backdrop images with a readable image
-scrim; generated concept art is not a runtime asset. Keep horizontal poster rows
-top-aligned, with readable names and years below the artwork.
+Discover prioritizes search and compact title rows. Trending starts directly
+below the category tabs; there is no spotlight banner or reserved hero space.
+Keep horizontal poster rows top-aligned, with readable names and years below
+the artwork.
 
 ## People and actions
 

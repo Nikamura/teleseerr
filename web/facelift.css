@@ -51,16 +51,7 @@ body:is([data-screen="detail"],[data-screen="admin"],[data-screen="profile"],[da
 body:is([data-screen="admin"],[data-screen="profile"],[data-screen="requests"]) .search-bar { display: none; }
 body:not([data-screen="trending"]) .masthead { margin-bottom: 12px; }
 body[data-screen="detail"] .search-bar { display: none; }
-.spotlight-host { margin: 16px 20px 25px; }
-.spotlight-placeholder { margin: 16px 20px 25px; height: 250px; border-radius: 16px; }
-.spotlight { width: 100%; height: 250px; display: block; position: relative; padding: 0; border: 0; border-radius: 16px; overflow: hidden; background: var(--card); text-align: left; color: #fff; cursor: pointer; }
-.spotlight img { width: 100%; height: 100%; object-fit: cover; }
-.spotlight-scrim { position: absolute; inset: 0; background: linear-gradient(180deg,transparent 20%,rgba(0,0,0,.9)); }
-.spotlight-copy { position: absolute; bottom: 21px; left: 20px; right: 70px; display: flex; flex-direction: column; }
-.spotlight-eyebrow { font-size: 12px; color: #e3ded5; margin-bottom: 3px; }
-.spotlight-title { font-size: 25px; font-weight: 730; line-height: 1.12; letter-spacing: -.6px; }
-.spotlight-meta { margin-top: 6px; color: #d7d1c8; font-size: 12px; }
-.spotlight-open { position: absolute; bottom: 24px; right: 18px; display: grid; place-items: center; width: 39px; height: 39px; border: 1.5px solid #e3ded5; border-radius: 50%; }
+#trending-view { padding-top: 24px; }
 .slider-section { margin-bottom: 27px; }
 .slider-header { padding: 0 20px 12px; }
 .slider-title { font-size: 20px; font-weight: 700; letter-spacing: -.45px; }
@@ -177,10 +168,6 @@ body[data-screen="detail"] .search-bar { display: none; }
   .discovery-intro p { font-size: 16px; }
   .search-bar { width: 100%; max-width: none; }
   .browse-tabs { width: 100%; max-width: none; }
-  .spotlight, .spotlight-placeholder { height: 330px; }
-  .spotlight-title { font-size: 38px; }
-  .spotlight-copy { bottom: 28px; left: 30px; }
-  .spotlight-open { right: 30px; bottom: 32px; }
   .slider-card { width: 155px; }
   .slider-card-poster { height: 228px; }
   .media-grid { grid-template-columns: repeat(6,minmax(0,1fr)); }
@@ -198,8 +185,6 @@ body[data-screen="detail"] .search-bar { display: none; }
   .discovery-intro h1 { font-size: 24px; }
   .filter-bar, .genre-chips, :is(#movies-view, #tv-view, #anime-view) .media-grid { padding-left: 14px; padding-right: 14px; }
   .search-bar input { font-size: 13px; }
-  .spotlight-host { margin-left: 14px; margin-right: 14px; }
-  .spotlight { height: 230px; }
   .people-tools { gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -351,7 +336,6 @@ input::placeholder, textarea::placeholder { color: var(--muted-foreground); opac
   .media-grid { grid-template-columns: repeat(auto-fill,minmax(155px,1fr)); }
   .slider-card { width: 172px; }
   .slider-card-poster { height: 258px; }
-  .spotlight, .spotlight-placeholder { height: clamp(330px,28vw,410px); }
 }
 .rail-controls { display: none; align-items: center; gap: 8px; }
 .rail-controls[hidden] { display: none; }
