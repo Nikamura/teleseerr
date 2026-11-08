@@ -1,3 +1,4 @@
+import { navigate, routerReady, backRoute } from "./router.js";
 import { openReports, openServiceStatus, editPendingRequest } from "./support.js";
 import { icon } from "./icons.js";
 import {
@@ -112,7 +113,8 @@ export function initProfileBtn() {
 }
 
 /** @returns {Promise<void>} */
-export async function showProfile() {
+export async function showProfile(routed = false) {
+  if (routerReady() && !routed) { navigate("/you"); return; }
   document.body.dataset.screen = "profile";
   const userState = getUserState();
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
@@ -154,9 +156,9 @@ export async function showProfile() {
     };
   }
 
-  const back = () => { /** @type {HTMLButtonElement} */ (document.querySelector('.primary-nav [data-tab="trending"]')).click(); };
+  const back = () => { if (routerReady()) { backRoute(); return; } /** @type {HTMLButtonElement} */ (document.querySelector('.primary-nav [data-tab="trending"]')).click(); };
   document.getElementById("profile-back-btn").onclick = back;
-  if (tg) { tg.BackButton.show(); tg.BackButton.onClick(back); }
+  if (tg) { tg.BackButton.show(); if (!routerReady()) tg.BackButton.onClick(back); }
 
   // Load quota
   if (userState.linked) {

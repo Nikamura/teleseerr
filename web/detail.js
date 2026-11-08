@@ -1,3 +1,4 @@
+import { navigate, routerReady, backRoute, tabPath } from "./router.js";
 import { openSupport, openServiceStatus } from "./support.js";
 import { icon } from "./icons.js";
 import { mountDownloads } from "./downloads.js";
@@ -103,13 +104,15 @@ function startProgressPolling(type, tmdbId, tvdbId) {
  * @param {number} id
  * @returns {Promise<void>}
  */
-export async function openDetail(type, id) {
+export async function openDetail(type, id, routed = false) {
+  if (routerReady() && !routed) { navigate(`/${type}/${id}`); return; }
   showLoading();
   clearProgressPolling();
   removeRequestBar();
 
   try {
     const data = await api(`/api/${type}/${id}`);
+    if (routerReady() && location.pathname !== `/${type}/${id}`) return;
     setCurrentDetail({ type, id, data });
     setSelectedSeasons(new Set());
     renderDetail(type, data);
@@ -313,7 +316,7 @@ export function renderDetail(type, d) {
 
   if (tg) {
     tg.BackButton.show();
-    tg.BackButton.onClick(goBack);
+    if (!routerReady()) tg.BackButton.onClick(goBack);
   }
 
   // Load recommendations and similar asynchronously
@@ -394,6 +397,7 @@ export async function loadDetailSlider(endpoint, containerId, title) {
 
 /** @returns {void} */
 export function goBack() {
+  if (routerReady()) { backRoute(tabPath(getCurrentTab())); return; }
   document.body.dataset.screen = getCurrentTab();
   clearProgressPolling();
   document.getElementById("detail-view").classList.remove("active");
@@ -558,12 +562,14 @@ export function updateTvRequestBar(show) {
  * @param {number} personId
  * @returns {Promise<void>}
  */
-export async function openPerson(personId) {
+export async function openPerson(personId, routed = false) {
+  if (routerReady() && !routed) { navigate(`/person/${personId}`); return; }
   showLoading();
   removeRequestBar();
 
   try {
     const data = await api(`/api/person/${personId}`);
+    if (routerReady() && location.pathname !== `/person/${personId}`) return;
     renderPerson(data);
   } catch {
     toast("Failed to load person");
@@ -645,7 +651,7 @@ export function renderPerson(person) {
 
   if (tg) {
     tg.BackButton.show();
-    tg.BackButton.onClick(goBackFromPerson);
+    if (!routerReady()) tg.BackButton.onClick(goBackFromPerson);
   }
 
   window.scrollTo(0, 0);
@@ -716,6 +722,7 @@ export async function loadFilmography(person) {
 
 /** @returns {void} */
 export function goBackFromPerson() {
+  if (routerReady()) { backRoute(tabPath(getCurrentTab())); return; }
   const navigationStack = getNavigationStack();
   document.getElementById("person-view").classList.remove("active");
 

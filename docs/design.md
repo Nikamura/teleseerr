@@ -51,3 +51,27 @@ profile navigation and a season-request submission. These checks do not establis
 production or native Telegram end-to-end behavior. Development-only captures and
 the source-hashed receipt are kept outside public assets under `.design/facelift`.
 No new runtime dependency was added.
+
+## Routed navigation and analytics
+
+Primary navigation uses real links and browser history: `/discover`, `/movies`,
+`/tv`, `/anime`, `/requests`, `/people`, `/you`, plus `/movie/:id`, `/tv/:id` and
+`/person/:id`. Browser Back/Forward and Telegram Back share one handler. Direct
+links reload using root-relative assets; direct-entry Back returns to Discover.
+Search terms stay in local history state rather than URL queries. Delayed detail
+responses cannot render over a different current route.
+
+Desktop navigation occupies its own opaque, sticky row above artwork, with a
+small amber underline and readable inactive labels. Mobile keeps the opaque
+bottom bar. Neither layout relies on poster contrast or a floating white pill.
+
+The existing proxy-injected GoatCounter loader observes history changes. This
+app opts into screen-only analytics: title/person IDs become aggregate detail
+buckets, search terms and launch parameters are omitted, referrers keep only the
+origin, and page titles contain no media/user data. Moving between different
+titles still counts navigation; same-path refreshes do not duplicate it. Analytics
+counts anonymous visitors/sessions, not identified Telegram accounts.
+
+Headless browser fixtures exercised routing, Back/Forward, deep reload, profile,
+People, search history privacy, person fallback and desktop/mobile layout. Captures
+are under `.design/navigation`; these do not represent a native Telegram test.

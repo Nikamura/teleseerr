@@ -1,9 +1,10 @@
+import { navigate, startRouter, tabPath, backRoute } from "./router.js";
 import { openServiceStatus } from "./support.js";
 import { icon } from "./icons.js";
-import { tg, isTelegramWebApp, api, setCurrentTab, setPreviousView, setUserState, getUserState, setCaps, clearProgressPolling } from "./state.js";
+import { tg, isTelegramWebApp, api, setCurrentTab, getCurrentTab, setPreviousView, setUserState, getUserState, setCaps, clearProgressPolling } from "./state.js";
 import { setCardClickHandler } from "./grid.js";
-import { loadDiscoverPage, loadGenreView, initSearch } from "./discover.js";
-import { openDetail, removeRequestBar } from "./detail.js";
+import { loadDiscoverPage, loadGenreView, initSearch, doSearch } from "./discover.js";
+import { openDetail, openPerson, removeRequestBar } from "./detail.js";
 import { loadRequests, initProfileBtn, showUnlinked, showLoginScreen, showProfile } from "./pages.js";
 import { showAdmin } from "./admin.js";
 
@@ -16,15 +17,16 @@ setCardClickHandler((type, id) => openDetail(type, id));
 /** @returns {void} */
 function initTabs() {
   document.querySelectorAll(".tab").forEach((tab) => {
-    /** @type {HTMLElement} */ (tab).onclick = () => switchTab(/** @type {HTMLElement} */ (tab).dataset.tab);
+    /** @type {HTMLElement} */ (tab).onclick = (event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); switchTab(/** @type {HTMLElement} */ (tab).dataset.tab); };
   });
 }
 
 /**
  * @param {string} tab
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function switchTab(tab) {
+async function switchTab(tab, routed = false) {
+  if (!routed) { navigate(tabPath(tab)); return; }
   clearProgressPolling();
   setCurrentTab(tab);
   document.body.dataset.screen = tab;
@@ -50,9 +52,9 @@ function switchTab(tab) {
   }
 
   const view = document.getElementById(viewId);
-  if (tab === "profile") { void showProfile(); return; }
+  if (tab === "profile") { await showProfile(true); return; }
   if (["admin", "requests"].includes(tab) || !view.children.length || (view.children.length === 1 && view.querySelector(".skeleton"))) {
-    loadTabContent(tab);
+    await loadTabContent(tab);
   }
 
   if (tg) tg.BackButton.hide();
@@ -115,7 +117,8 @@ async function init() {
   // Add admin tab if needed
   if (userState.isAdmin) {
     const nav = document.getElementById("tabs-nav");
-    const adminTab = document.createElement("button");
+    const adminTab = document.createElement("a");
+    adminTab.href = "/people";
     adminTab.className = "tab";
     adminTab.dataset.tab = "admin";
     adminTab.innerHTML = `${icon("people")}<span>People</span>`;
@@ -128,6 +131,7 @@ async function init() {
   initTabs();
   initSearch();
   initProfileBtn();
+  if (tg) tg.BackButton.onClick(() => backRoute(tabPath(getCurrentTab())));
 
   // Fetch capabilities for 4K support
   api("/api/capabilities").then((c) => { setCaps(c); }).catch(() => {});
@@ -138,8 +142,28 @@ async function init() {
     const banner=document.createElement("button");banner.className="service-banner";banner.textContent=`${unavailable.map(s=>s.name).join(", ")} unavailable · Check status`;banner.onclick=openServiceStatus;document.querySelector(".top-bar")?.after(banner);
   }).catch(()=>{});
 
-  // Load initial content
-  loadTabContent("trending");
+  // One route renderer for click navigation, deep links and browser Back/Forward.
+  startRouter(async (route, state) => {
+    document.getElementById("support-dialog")?.remove();
+    if (route.kind === "tab") {
+      if (route.tab === "admin" && !getUserState().isAdmin) { navigate("/discover",{replace:true}); return; }
+      await switchTab(route.tab, true);
+    } else if (route.kind === "detail") {
+      await openDetail(route.type,route.id,true);
+    } else if (route.kind === "person") {
+      await openPerson(route.id,true);
+    } else {
+      clearProgressPolling(); removeRequestBar();
+      if (tg) tg.BackButton.show();
+      document.body.dataset.screen = "search";
+      document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+      document.getElementById("search-view").classList.add("active");
+      const query = typeof state.query === "string" ? state.query : "";
+      /** @type {HTMLInputElement} */(document.getElementById("search-input")).value=query;
+      if (query.length >= 2) await doSearch(query);
+      else document.getElementById("search-view").textContent="Search for a movie, show or person above.";
+    }
+  });
 }
 
 init();

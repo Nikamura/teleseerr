@@ -27,6 +27,7 @@ a { color: var(--link); text-underline-offset: 3px; }
 [hidden] { display: none !important; }
 #app { max-width: 480px; padding: 0 0 calc(108px + env(safe-area-inset-bottom)); }
 .top-bar { display: block; position: relative; padding: 14px 20px 0; background: var(--background); }
+.browse-header { padding: 0 20px; }
 .masthead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .brand { display: inline-flex; gap: 10px; align-items: center; text-decoration: none; color: var(--foreground); font-size: 25px; font-weight: 750; letter-spacing: -.8px; }
 .brand-mark { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: #f2bd63; color: #20190f; }
@@ -42,7 +43,7 @@ a { color: var(--link); text-underline-offset: 3px; }
 .browse-tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 4px; font-size: 14px; font-weight: 500; min-height: 44px; }
 .browse-tab.active { background: none; color: var(--foreground); border-bottom-color: var(--primary); font-weight: 700; }
 .primary-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); z-index: 30; width: min(100%,480px); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--background); border-top: 1px solid var(--border); display: flex; gap: 0; overflow: visible; }
-.primary-nav .tab { flex: 1; min-width: 0; min-height: 55px; padding: 5px 3px; border: 0; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted-foreground); font-size: 11px; font-weight: 600; background: none; }
+.primary-nav .tab { transition: color 120ms ease-out, border-color 120ms ease-out; text-decoration: none; flex: 1; min-width: 0; min-height: 55px; padding: 5px 3px; border: 0; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; color: var(--muted-foreground); font-size: 11px; font-weight: 600; background: none; }
 .primary-nav .tab svg { display: block; width: 23px; height: 23px; }
 .primary-nav .tab.active { color: var(--primary); background: none; }
 body:not([data-screen="trending"]) .discovery-intro { display: none; }
@@ -160,11 +161,12 @@ body[data-screen="detail"] .search-bar { display: none; }
 .spinner { border-top-color: var(--primary); }
 @media (min-width: 900px) {
   #app { max-width: 1120px; padding: 0 28px 60px; }
-  .top-bar { padding: 20px 20px 0; }
-  .primary-nav { top: 16px; bottom: auto; left: 50%; right: auto; transform: translateX(-50%); width: 400px; border: 0; background: none; padding: 0; }
-  .primary-nav .tab { flex-direction: row; gap: 8px; font-size: 13px; }
-  .primary-nav .tab.active { background: var(--muted); }
-  .masthead { margin-bottom: 38px; }
+  .top-bar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 20px; margin-bottom: 24px; border-bottom: 1px solid var(--border); background: var(--background); }
+  .top-bar .profile-btn { display: none; }
+  .primary-nav { position: static; top: auto; bottom: auto; left: auto; right: auto; transform: none; width: auto; margin: 0; padding: 0; border: 0; background: var(--background); gap: 8px; }
+  .primary-nav .tab { flex: 0 1 auto; min-height: 44px; padding: 8px 18px; flex-direction: row; gap: 8px; font-size: 14px; color: var(--foreground); border-radius: 0; border-bottom: 2px solid transparent; }
+  .primary-nav .tab.active { color: var(--primary); background: none; border-bottom-color: var(--primary); }
+  body .top-bar .masthead { margin-bottom: 0; }
   .discovery-intro h1 { font-size: 38px; }
   .discovery-intro p { font-size: 16px; }
   .search-bar { max-width: 560px; }
@@ -186,7 +188,7 @@ body[data-screen="detail"] .search-bar { display: none; }
   .detail-overview { max-width: 760px; }
 }
 @media (max-width: 359px) {
-  .top-bar, #admin-view, #requests-view, #profile-view { padding-left: 14px; padding-right: 14px; }
+  .top-bar, .browse-header, #admin-view, #requests-view, #profile-view { padding-left: 14px; padding-right: 14px; }
   .discovery-intro h1 { font-size: 24px; }
   .search-bar input { font-size: 13px; }
   .spotlight-host { margin-left: 14px; margin-right: 14px; }

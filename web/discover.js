@@ -1,3 +1,4 @@
+import { navigate, routerReady, tabPath } from "./router.js";
 import { icon } from "./icons.js";
 import { api, escHtml, posterUrl, year, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
 import { renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore, openMedia } from "./grid.js";
@@ -326,6 +327,7 @@ export function initSearch() {
     const q = searchInput.value.trim();
 
     if (q.length < 2) {
+      if (routerReady() && location.pathname === "/search") { navigate(tabPath(getCurrentTab()), {replace:true}); return; }
       document.getElementById("search-view").classList.remove("active");
       document.getElementById(`${getCurrentTab()}-view`).classList.add("active");
       return;
@@ -334,7 +336,7 @@ export function initSearch() {
     document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
     document.getElementById("search-view").classList.add("active");
 
-    setSearchTimeout(setTimeout(() => doSearch(q), 350));
+    setSearchTimeout(setTimeout(() => routerReady() ? navigate("/search", {replace:location.pathname === "/search",query:q}) : doSearch(q), 350));
   });
 }
 
@@ -348,6 +350,7 @@ export async function doSearch(q) {
 
   try {
     const data = await api(`/api/search?q=${encodeURIComponent(q)}`);
+    if (routerReady() && (location.pathname !== "/search" || document.getElementById("search-input")["value"] !== q)) return;
     view.innerHTML = "";
     if (data.results.length === 0) {
       view.innerHTML = `<div class="empty">No results for "${escHtml(q)}"</div>`;

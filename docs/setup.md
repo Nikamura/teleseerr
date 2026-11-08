@@ -312,3 +312,12 @@ Diagnostics and reports redact private Arr messages into actionable categories.
 Unavailable adapters are explicitly labelled. Subtitle issues offer verified
 track information, player guidance and tracked reports; no global subtitle scan
 or automatic codec/quality setting changes are triggered.
+
+### Screen routes and GoatCounter
+
+The app uses History API routes with the existing SPA fallback. Serve assets from
+root paths, and preserve `/stats` handlers before the SPA fallback. Teleseerr's
+`analytics-path-mode=screens` meta opts into the shared homelab loader's private
+screen buckets. The proxy injects one tracker; do not add another count.js tag.
+Analytics remains at `/stats/` behind the existing admin gate. Counting is
+anonymous and aggregates title/person pages rather than sending their IDs.
