@@ -1,3 +1,4 @@
+import { addRailControls } from "./grid.js";
 import { navigate, routerReady, backRoute, tabPath } from "./router.js";
 import { openSupport, openServiceStatus } from "./support.js";
 import { icon } from "./icons.js";
@@ -390,6 +391,7 @@ export async function loadDetailSlider(endpoint, containerId, title) {
     }
     section.appendChild(row);
     container.appendChild(section);
+    addRailControls(section);
   } catch {
     // Silently fail for recommendations/similar
   }
@@ -720,6 +722,7 @@ export async function loadFilmography(person) {
 
   section.appendChild(row);
   container.appendChild(section);
+  addRailControls(section);
 }
 
 /** @returns {void} */

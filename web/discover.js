@@ -1,7 +1,7 @@
 import { navigate, routerReady, tabPath } from "./router.js";
 import { icon } from "./icons.js";
 import { api, escHtml, posterUrl, year, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
-import { renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore, openMedia } from "./grid.js";
+import { addRailControls, renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore, openMedia } from "./grid.js";
 
 // ── Discover Page (Trending tab) ────────────
 
@@ -75,6 +75,7 @@ export async function loadDiscoverSection(section, container) {
     for (const item of items) {
       row.appendChild(renderSliderCard(item));
     }
+    addRailControls(container);
   } catch {
     if (!container.isConnected) return;
     if (section.key === "trending") document.getElementById("discover-spotlight")?.remove();

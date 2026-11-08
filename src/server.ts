@@ -33,6 +33,7 @@ import {
   matchRoute,
   getAllowedOrigin,
   serveStatic,
+  FRONTEND_VERSION,
   ClientError,
   type Route,
 } from "./http.js";
@@ -236,8 +237,8 @@ export function startServer(bot: Bot): void {
     try {
       // Health check
       if (path === "/health") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok" }));
+        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify({ status: "ok", frontendVersion: FRONTEND_VERSION }));
         return;
       }
 

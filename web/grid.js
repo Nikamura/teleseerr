@@ -149,3 +149,36 @@ export function addLoadMore(container, handler) {
 export function removeLoadMore(container) {
   container.querySelector(".load-more")?.remove();
 }
+
+/** Mouse and keyboard navigation for poster rails, alongside touch scrolling.
+ * @param {HTMLElement} section
+ */
+export function addRailControls(section) {
+  const row = /** @type {HTMLElement} */ (section.querySelector(".slider-row"));
+  const header = section.querySelector(".slider-header");
+  if (!row || !header) return;
+  if (header.querySelector(".rail-controls")) { row.dispatchEvent(new Event("rail-resize")); return; }
+  const title = header.querySelector(".slider-title")?.textContent ?? "Titles";
+  const controls = document.createElement("div");
+  controls.className = "rail-controls";
+  const buttons = [-1, 1].map((direction) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", `${direction < 0 ? "Previous" : "Next"} titles in ${title}`);
+    button.textContent = direction < 0 ? "←" : "→";
+    button.onclick = () => row.scrollBy({ left: direction * row.clientWidth * .85, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    controls.appendChild(button);
+    return button;
+  });
+  function update() {
+    controls.hidden = row.scrollWidth <= row.clientWidth + 1;
+    buttons[0].disabled = row.scrollLeft <= 1;
+    buttons[1].disabled = row.scrollLeft + row.clientWidth >= row.scrollWidth - 1;
+  }
+  header.appendChild(controls);
+  row.addEventListener("scroll", update, { passive: true });
+  // A shared resize listener below refreshes only connected rails.
+  row.addEventListener("rail-resize", update);
+  requestAnimationFrame(update);
+}
+window.addEventListener("resize", () => document.querySelectorAll(".slider-row").forEach(row => row.dispatchEvent(new Event("rail-resize"))), { passive: true });

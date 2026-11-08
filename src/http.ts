@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { readFile } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, readdirSync, readFileSync } from "fs";
+import { createHash } from "crypto";
 import { join, extname } from "path";
 import { config } from "./config.js";
 import type { ValidAuth } from "./auth.js";
@@ -20,6 +21,17 @@ export const MIME: Record<string, string> = {
 };
 
 export const WEB_DIR = join(__dirname, "..", "web");
+// Content identity also works for local builds without Git or image metadata.
+export const FRONTEND_VERSION = createHash("sha256")
+  .update(
+    readdirSync(WEB_DIR)
+      .sort()
+      .filter((name) => /\.(html|css|js)$/.test(name))
+      .map((name) => `${name}\0${readFileSync(join(WEB_DIR, name), "utf8")}`)
+      .join("\0"),
+  )
+  .digest("hex")
+  .slice(0, 16);
 
 // ── Errors ────────────────────────────────────────
 
@@ -100,7 +112,16 @@ export async function serveStatic(res: ServerResponse, urlPath: string): Promise
 
   const ext = extname(filePath);
   const contentType = MIME[ext] ?? "application/octet-stream";
-  const content = await readFile(filePath);
+  let content: Buffer | string = await readFile(filePath);
+  if (ext === ".html") {
+    content = content
+      .toString()
+      .replace("<!-- app-version -->", `<meta name="app-version" content="${FRONTEND_VERSION}">`)
+      .replace(
+        /(href|src)="(\/(?:style\.css|facelift\.css|app\.js))"/g,
+        `$1="$2?v=${FRONTEND_VERSION}"`,
+      );
+  }
   res.writeHead(200, {
     "Content-Type": contentType,
     "Cache-Control": "no-cache, no-store, must-revalidate",

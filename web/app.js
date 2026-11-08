@@ -1,3 +1,4 @@
+import { watchForUpdates } from "./updates.js";
 import { navigate, startRouter, tabPath, backRoute } from "./router.js";
 import { openServiceStatus } from "./support.js";
 import { icon } from "./icons.js";
@@ -7,6 +8,8 @@ import { loadDiscoverPage, loadGenreView, initSearch, doSearch } from "./discove
 import { openDetail, openPerson, removeRequestBar } from "./detail.js";
 import { loadRequests, initProfileBtn, showUnlinked, showLoginScreen, showProfile } from "./pages.js";
 import { showAdmin } from "./admin.js";
+
+watchForUpdates();
 
 // ── Wire up grid card clicks to detail view ──
 
