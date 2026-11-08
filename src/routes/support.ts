@@ -298,6 +298,30 @@ export async function handleSupportAction({ auth, req, res }: RouteContext): Pro
   const b = await parseJsonBody(req);
   if (b["confirmed"] !== true) throw new ClientError(400, "Confirm this action");
   const instance = instanceByName(b["instance"]);
+  if (b["action"] === "refresh-library") {
+    const tmdbId = positive(b["tmdbId"]);
+    const series = instance.type === "sonarr" ? await findSeries(instance, tmdbId) : undefined;
+    const movie =
+      instance.type === "radarr"
+        ? (await arr<Movie[]>(instance, "movie")).find((m) => m.tmdbId === tmdbId)
+        : undefined;
+    if (!series && !movie)
+      throw new ClientError(409, "Title mapping is unavailable. Refresh its request status first.");
+    cooldownAction(auth.userId, `${instance.name}:${tmdbId}:refresh`, 300);
+    await arr(
+      instance,
+      "command",
+      "POST",
+      series
+        ? { name: "RescanSeries", seriesId: series.id }
+        : { name: "RescanMovie", movieId: movie?.id },
+    );
+    json(res, {
+      message:
+        "Library refresh queued for this title. Reopen its status shortly. Plex and Seerr may need their next scan to reflect the result.",
+    });
+    return;
+  }
   const item = (await queue(instance)).find((i) => i.id === positive(b["queueId"]));
   if (!item) throw new ClientError(409, "Transfer changed. Refresh first.");
   if (b["action"] === "priority") {

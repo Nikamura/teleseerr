@@ -278,6 +278,10 @@ a user-supplied URL. Diagnostics show speed, peers and last activity when availa
 Watch sooner moves just that shared hash to the top, requires queueing enabled,
 verifies the resulting priority and has a persistent 30-minute cooldown. It never
 pauses other transfers or enables global queueing. No peers still needs a source.
+Refresh library status submits only a mapped RescanSeries/RescanMovie command,
+with a five-minute cooldown. It does not forge Seerr availability or trigger a
+global Plex scan. Seerr and Plex may need their next scan to catch up.
+
 Import retry derives the completed transfer's path from Arr and submits only a
 DownloadedEpisodesScan/DownloadedMoviesScan with Auto mode, with a five-minute
 cooldown. It cannot fix storage permissions or a full disk.

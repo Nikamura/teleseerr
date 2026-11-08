@@ -204,3 +204,43 @@ test("failed request retry uses the owner's Seerr identity, available requests c
   await handleRequestChange(ctx(42, { id: 19, action: "retry", confirmed: true }));
   assert.equal(actor, "9");
 });
+
+test("library refresh maps exactly one title and never accepts a user-supplied path or scan scope", async () => {
+  const { handleSupportAction } = await import("../src/routes/support.js");
+  const commands: any[] = [];
+  globalThis.fetch = async (url, init) => {
+    if (init?.method === "POST") {
+      commands.push(JSON.parse(String(init.body)));
+      return new Response("{}");
+    }
+    assert.ok(String(url).endsWith("/movie"));
+    return new Response(
+      JSON.stringify([{ id: 700, tmdbId: 321, hasFile: false, monitored: false }]),
+    );
+  };
+  await assert.rejects(
+    () =>
+      handleSupportAction(
+        ctx(99, { instance: "radarr", action: "refresh-library", tmdbId: 321, confirmed: true }),
+      ),
+    /Manage downloads/,
+  );
+  await handleSupportAction(
+    ctx(1, {
+      instance: "radarr",
+      action: "refresh-library",
+      tmdbId: 321,
+      path: "/arbitrary",
+      movieId: 999,
+      confirmed: true,
+    }),
+  );
+  assert.deepEqual(commands, [{ name: "RescanMovie", movieId: 700 }]);
+  await assert.rejects(
+    () =>
+      handleSupportAction(
+        ctx(1, { instance: "radarr", action: "refresh-library", tmdbId: 999, confirmed: true }),
+      ),
+    /mapping/,
+  );
+});
