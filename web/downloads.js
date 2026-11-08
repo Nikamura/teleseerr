@@ -19,11 +19,22 @@ function renderEpisodes(data, tmdbId) {
       const group = episodes.filter(e => e.season === season);
       const ready = group.filter(e => e.state === "available").length;
       const missing = group.filter(e => e.state === "missing");
+      const attention = group.filter(e => ["failed", "attention", "paused"].includes(e.state)).length;
+      const transferring = group.filter(e => ["downloading", "queued", "importing"].includes(e.state)).length;
+      const upcoming = group.filter(e => e.state === "unaired").length;
+      const unknown = group.filter(e => e.state === "unknown").length;
+      const complete = ready === group.length;
+      const badges = `<span class="season-status season-status-${complete ? "complete" : "available"}">${complete ? "✓ " : ""}${ready}/${group.length} ${complete ? "complete" : "available"}</span>` +
+        (missing.length ? `<span class="season-status season-status-missing">${missing.length} missing</span>` : "") +
+        (attention ? `<span class="season-status season-status-missing">${attention} need attention</span>` : "") +
+        (transferring ? `<span class="season-status season-status-downloading">${transferring} downloading / queued</span>` : "") +
+        (upcoming ? `<span class="season-status season-status-available">${upcoming} not aired</span>` : "") +
+        (unknown ? `<span class="season-status season-status-available">${unknown} air date unknown</span>` : "");
       const unmonitored = missing.filter(e => !e.monitored).length;
       const search = library.searches?.find(s => s.season === season);
       const searching = search && ["queued", "started"].includes(search.status);
       const recovery = `<div class="season-recovery">${missing.length ? `<p>${missing.length} missing${unmonitored ? ` · ${unmonitored} not monitored` : ""}</p>` : ""}${searching ? '<p role="status">Searching for requested episodes…</p>' : search?.status === "failed" ? '<p>Search failed. Refresh or try again.</p>' : search?.status === "completed" && missing.length ? '<p>Search finished. Some episodes still need a suitable release.</p>' : ""}${data.canManage && missing.length && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-count="${missing.length}" data-instance="${escHtml(library.instance)}">Download missing episodes</button>` : ""}<p class="recovery-result" role="status"></p></div>`;
-      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span>${ready}/${group.length} available</span></summary>${recovery}<div class="episode-list">` + group.map(ep => {
+      return `<details class="episode-season" data-season="${season}" data-library="${escHtml(library.instance)}"><summary>${season === 0 ? "Specials" : `Season ${season}`} <span class="season-statuses">${badges}</span></summary>${recovery}<div class="episode-list">` + group.map(ep => {
         const label = episodeLabels[ep.state] ?? "Status unknown";
         const date = ep.airDate ? new Date(ep.airDate).toLocaleDateString(undefined, {year:"numeric",month:"short",day:"numeric"}) : "";
         return `<div class="episode-row"><div class="episode-heading"><strong>S${String(ep.season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")} · ${escHtml(ep.title)}</strong><span class="episode-state episode-state-${ep.state}">${label}${ep.percent != null && ep.state !== "available" ? ` · ${ep.percent}%` : ""}</span></div>${date ? `<p>${ep.state === "unaired" ? "Airs" : "Air date"}: ${escHtml(date)}</p>` : ""}${!ep.monitored && ep.state === "missing" ? '<p>Not monitored for downloads.</p>' : ""}${data.canManage && ep.state === "missing" && !searching ? `<button class="quick-btn secondary" data-recover-season="${season}" data-recover-episode="${ep.id}" data-episode-label="S${String(season).padStart(2,"0")}E${String(ep.episode).padStart(2,"0")}" data-count="1" data-instance="${escHtml(library.instance)}">Download episode</button><p class="recovery-result" role="status"></p>` : ""}${ep.canSearch ? `<button class="quick-btn secondary" data-episode="${ep.id}" data-instance="${escHtml(library.instance)}" data-tmdb="${tmdbId}" ${ep.queueId != null ? `data-queue="${ep.queueId}"` : ""}>${ep.queueId != null ? "Find alternatives" : "Find releases"}</button>` : ""}<div class="release-options" aria-live="polite"></div></div>`;

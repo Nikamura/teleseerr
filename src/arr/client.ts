@@ -155,23 +155,31 @@ function calcPercent(size: number, sizeleft: number): number {
 }
 
 function mapStatus(item: ArrQueueItem): DownloadProgress["status"] {
-  if (item.trackedDownloadState === "importPending" || item.trackedDownloadState === "importing") {
-    return "importing";
-  }
   if (item.status === "failed" || item.trackedDownloadState === "failedPending") {
     return "failed";
   }
-  if (item.status === "warning") return "stalled";
+  if (
+    item.status === "warning" ||
+    item.trackedDownloadStatus === "warning" ||
+    item.trackedDownloadStatus === "error"
+  )
+    return "stalled";
+  if (
+    item.sizeleft === 0 ||
+    ["importPending", "importing", "imported"].includes(item.trackedDownloadState)
+  )
+    return "importing";
   if (item.status === "paused") return "paused";
   if (item.status === "queued") return "queued";
   return "downloading";
 }
 
 function itemToProgress(item: ArrQueueItem): DownloadProgress {
+  const status = mapStatus(item);
   return {
     percent: calcPercent(item.size, item.sizeleft),
-    eta: parseTimeleft(item.timeleft),
-    status: mapStatus(item),
+    eta: status === "downloading" && item.sizeleft > 0 ? parseTimeleft(item.timeleft) : null,
+    status,
     title: item.title,
     sizeTotal: item.size,
     sizeDownloaded: item.size - item.sizeleft,
@@ -206,15 +214,53 @@ export async function getTvProgress(tmdbId: number, tvdbId?: number): Promise<Pr
   const { sonarr } = getInstances();
   if (sonarr.length === 0) return EMPTY_RESPONSE;
 
-  const queues = await Promise.all(sonarr.map(getQueueCached));
-  const items = queues
-    .flat()
-    .filter((item) => {
-      if (item.series?.tmdbId && item.series.tmdbId === tmdbId) return true;
-      if (tvdbId && item.series?.tvdbId === tvdbId) return true;
-      return false;
-    })
-    .map(itemToProgress);
+  const perInstance = await Promise.all(
+    sonarr.map(async (instance) => {
+      const matched = (await getQueueCached(instance)).filter((item) => {
+        if (item.series?.tmdbId) return item.series.tmdbId === tmdbId;
+        return !!tvdbId && item.series?.tvdbId === tvdbId;
+      });
+      // Queue entries can remain after import (for example while seeding).
+      // Read current files independently of the queue cache, per service/tier.
+      const files = new Set<number>();
+      const seriesIds = new Set(
+        matched
+          .filter((i) => i.sizeleft === 0)
+          .map((i) => i.seriesId ?? i.series?.id)
+          .filter((id): id is number => Number.isSafeInteger(id) && Number(id) > 0),
+      );
+      await Promise.all(
+        [...seriesIds].map(async (seriesId) => {
+          try {
+            const response = await fetch(`${instance.url}/api/v3/episode?seriesId=${seriesId}`, {
+              headers: { "X-Api-Key": instance.apiKey },
+              redirect: "error",
+              signal: AbortSignal.timeout(5000),
+            });
+            if (!response.ok) return;
+            const episodes = (await response.json()) as {
+              id: number;
+              seriesId: number;
+              hasFile: boolean;
+            }[];
+            for (const episode of episodes)
+              if (episode.seriesId === seriesId && episode.hasFile) files.add(episode.id);
+          } catch {
+            // Without file confirmation, a completed transfer remains pending import.
+          }
+        }),
+      );
+      return matched.map((item) => {
+        const progress = itemToProgress(item);
+        if (item.sizeleft === 0 && files.has(item.episodeId ?? item.episode?.id ?? -1)) {
+          progress.status = "available";
+          progress.eta = null;
+        }
+        return progress;
+      });
+    }),
+  );
+  const items = perInstance.flat();
 
   // Season pack detection: all items share the same download title
   const titles = new Set(items.map((i) => i.title));

@@ -265,8 +265,10 @@ export type ArrQueueItem = {
   trackedDownloadStatus: string;
   errorMessage?: string;
   movie?: { tmdbId: number };
-  series?: { tmdbId: number; tvdbId?: number };
-  episode?: { seasonNumber: number; episodeNumber: number; title: string };
+  seriesId?: number;
+  episodeId?: number;
+  series?: { id?: number; tmdbId: number; tvdbId?: number };
+  episode?: { id?: number; seasonNumber: number; episodeNumber: number; title: string };
 };
 
 export type ArrQueueResponse = {
@@ -281,7 +283,7 @@ export type ArrQueueResponse = {
 export type DownloadProgress = {
   percent: number;
   eta: string | null;
-  status: "downloading" | "paused" | "queued" | "importing" | "stalled" | "failed";
+  status: "downloading" | "paused" | "queued" | "importing" | "stalled" | "failed" | "available";
   title: string;
   sizeTotal: number;
   sizeDownloaded: number;

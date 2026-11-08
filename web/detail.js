@@ -23,45 +23,23 @@ function renderProgressSection(progress, type) {
   let html = '<div class="download-progress">';
   html += '<div class="download-progress-title">Download Progress</div>';
 
-  if (type === "tv" && progress.items.length > 1 && !progress.isSeasonPack) {
-    for (const item of progress.items) {
-      const epLabel = item.episode
-        ? `S${String(item.episode.season).padStart(2, "0")}E${String(item.episode.episode).padStart(2, "0")}`
-        : "";
-      const epTitle = item.episode?.title ?? "";
-      html += `
-        <div class="download-item">
-          <div class="download-item-header">
-            <span class="download-ep-label">${epLabel}</span>
-            <span class="download-ep-title">${escHtml(epTitle)}</span>
-            <span class="download-percent">${item.percent}%</span>
-          </div>
-          <div class="download-bar-track">
-            <div class="download-bar-fill ${item.status}" style="width:${item.percent}%"></div>
-          </div>
-          ${item.eta ? `<div class="download-eta">ETA: ${escHtml(item.eta)}</div>` : ""}
-        </div>`;
-    }
-  } else {
-    const item = progress.items[0];
-    const statusLabel = item.status === "paused" ? " (Paused)"
-      : item.status === "queued" ? " (Queued)"
-      : item.status === "importing" ? " (Importing...)"
-      : item.status === "stalled" ? " (Stalled)"
-      : item.status === "failed" ? " (Failed)"
-      : "";
-
-    html += `
-      <div class="download-item">
-        <div class="download-item-header">
-          <span class="download-percent">${item.percent}%${statusLabel}</span>
-          ${item.eta ? `<span class="download-eta">ETA: ${escHtml(item.eta)}</span>` : ""}
-        </div>
-        <div class="download-bar-track">
-          <div class="download-bar-fill ${item.status}" style="width:${item.percent}%"></div>
-        </div>
-        ${progress.isSeasonPack ? '<div class="download-note">Season pack</div>' : ""}
-      </div>`;
+  if (progress.isSeasonPack) html += '<div class="download-note">Season pack</div>';
+  for (const item of progress.items) {
+    const epLabel = item.episode
+      ? `S${String(item.episode.season).padStart(2, "0")}E${String(item.episode.episode).padStart(2, "0")}` : "";
+    const terminal = ["available", "importing", "failed", "stalled"].includes(item.status);
+    const statusLabel = item.status === "available" ? "✓ Available"
+      : item.status === "importing" ? "Preparing for playback"
+      : ["failed", "stalled"].includes(item.status) ? "Needs attention"
+      : `${item.percent}%${item.status === "paused" ? " · Paused" : item.status === "queued" ? " · Queued" : ""}`;
+    html += `<div class="download-item">
+      <div class="download-item-header">
+        ${epLabel ? `<span class="download-ep-label">${epLabel}</span><span class="download-ep-title">${escHtml(item.episode?.title ?? "")}</span>` : ""}
+        <span class="download-percent download-status-${item.status}">${statusLabel}</span>
+      </div>
+      ${!terminal ? `<div class="download-bar-track"><div class="download-bar-fill ${item.status}" style="width:${item.percent}%"></div></div>` : ""}
+      ${!terminal && item.status === "downloading" && item.eta && item.eta !== "0s" ? `<div class="download-eta">ETA: ${escHtml(item.eta)}</div>` : ""}
+    </div>`;
   }
 
   html += "</div>";

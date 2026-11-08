@@ -1721,10 +1721,19 @@ html, body {
 .episode-overview strong { color: var(--foreground); }
 .episode-season { margin-top: 12px; border: 1px solid var(--border); border-radius: 10px; }
 .episode-season summary { cursor: pointer; padding: 12px; font-weight: 600; }
-.episode-season summary span { font-size: 12px; font-weight: 400; color: var(--muted-foreground); margin-left: 8px; }
+.episode-season summary .season-statuses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.season-status { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.season-status-available { color: var(--muted-foreground); background: var(--muted); }
+.season-status-complete { color: #86efac; background: #123425; }
+.season-status-missing { color: #fcd34d; background: #422e0e; }
+.season-status-downloading { color: #93c5fd; background: #102f4c; }
 .episode-row { padding: 12px; border-top: 1px solid var(--border); }
 .episode-heading { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .episode-state { font-size: 12px; font-weight: 600; }
 .episode-state-available { color: #16803d; }
 .episode-state-missing, .episode-state-failed, .episode-state-attention { color: #b45309; }
 .episode-row .quick-btn { margin-top: 6px; }
+
+.download-status-available { color: #86efac; }
+.download-status-importing { color: var(--link); }
+.download-status-failed, .download-status-stalled { color: #fcd34d; }
