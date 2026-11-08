@@ -1,8 +1,15 @@
 name: Independent status
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['status/**', 'scripts/check-status.mjs', '.github/workflows/status.yml']
+  workflow_run:
+    workflows: [Docker]
+    branches: [main]
+    types: [completed]
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '7,22,37,52 * * * *'
 permissions:
   contents: read
   pages: write
@@ -12,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   status:
-    if: vars.TELESEERR_PUBLIC_URL != ''
+    if: vars.TELESEERR_PUBLIC_URL != '' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     environment:
       name: github-pages

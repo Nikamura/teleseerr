@@ -1,1 +1,57 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark light"><title>Teleseerr · Status</title><style>body{font:17px/1.6 system-ui;max-width:620px;margin:12vh auto;padding:24px;background:#111213;color:#f6f3ed}h1{font-size:40px;letter-spacing:-1.5px}article{padding:20px 0;border-bottom:1px solid #ffffff24}small,p{color:#adadad}a{color:#f2bd63}.up{color:#8fdbb0}.down{color:#f0bc71}</style><p>TELESEERR</p><h1>Is movie night on?</h1><div id="status" role="status">Checking the latest independent observation…</div><p id="time"></p><p>This page runs on GitHub Pages, independently of the home server. Checks are scheduled every 15 minutes and can be delayed. Reachability does not test playback on your device.</p><p><a href="https://teleseerr.cn.lt">Open Teleseerr ↗</a></p><script>fetch('./status.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json()}).then(d=>{const age=Date.now()-Date.parse(d.checkedAt);const stale=!Number.isFinite(age)||age>45*60000;document.getElementById('status').replaceChildren(...d.services.map(s=>{const a=document.createElement('article');a.className=stale?'':s.available?'up':'down';a.textContent=(stale?'?':s.available?'✓':'⚠')+' '+s.name+' · '+(stale?'Status unknown — last check is old':s.available?'Reachable':'Unavailable');return a}));document.getElementById('time').textContent='Last checked: '+new Date(d.checkedAt).toLocaleString()}).catch(()=>{document.getElementById('status').textContent='Status is unavailable. This does not confirm an outage.'});</script></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Teleseerr · Service status</title>
+  <style>
+    :root { color-scheme: dark; --bg:#111213; --card:#1b1c1d; --text:#f6f3ed; --muted:#aaa9a4; --border:#ffffff24; --accent:#f2bd63; --good:#8fdbb0; }
+    @media (prefers-color-scheme:light) { :root { color-scheme:light; --bg:#f8f7f3; --card:#fff; --text:#202221; --muted:#676a67; --border:#20222124; --accent:#885800; --good:#246b35; } }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
+    main { max-width:720px; margin:clamp(24px,8vh,80px) auto; padding:24px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:40px; }
+    .brand { color:var(--text); font-size:22px; font-weight:750; letter-spacing:-1px; text-decoration:none; }
+    a { color:var(--accent); text-underline-offset:4px; }
+    header a:last-child { min-height:44px; display:inline-flex; align-items:center; }
+    h1 { margin:0 0 8px; font-size:clamp(28px,5vw,36px); letter-spacing:-1px; line-height:1.2; }
+    .intro { color:var(--muted); margin:0 0 28px; }
+    .status-card { padding:24px; background:var(--card); border:1px solid var(--border); border-radius:16px; }
+    .service { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
+    h2 { margin:0; font-size:18px; }
+    #state { display:inline-flex; align-items:center; gap:8px; font-weight:650; }
+    #state::before { content:''; width:8px; height:8px; border-radius:50%; background:currentColor; flex-shrink:0; }
+    #state[data-state=online] { color:var(--good); }
+    #state[data-state=unknown] { color:var(--accent); }
+    #checked, #detail, .observation { color:var(--muted); font-size:14px; }
+    #detail { margin:16px 0; }
+    #checked { margin:0; }
+    .actions { display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-top:20px; }
+    button { min-height:44px; padding:8px 16px; border:1px solid var(--border); border-radius:8px; background:var(--bg); color:var(--text); font:inherit; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:wait; }
+    :focus-visible { outline:3px solid var(--accent); outline-offset:4px; }
+    .observation { margin:24px 0 0; padding-top:20px; border-top:1px solid var(--border); }
+    .observation p { margin:8px 0; }
+    footer { margin-top:24px; color:var(--muted); font-size:13px; }
+    @media(max-width:400px) { main { padding:20px; } .status-card { padding:20px; } header { margin-bottom:28px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><a class="brand" href="https://teleseerr.cn.lt">teleseerr</a><a href="https://teleseerr.cn.lt">Open app ↗</a></header>
+    <h1>Service status</h1>
+    <p class="intro">Having trouble connecting? Check whether the app is reachable.</p>
+    <section class="status-card" aria-labelledby="service-title">
+      <div class="service"><h2 id="service-title">Teleseerr</h2><span id="state" role="status" aria-live="polite">Checking…</span></div>
+      <p id="detail">Connecting to the app from this browser.</p>
+      <p id="checked"></p>
+      <div class="actions"><button id="retry" type="button">Check again</button></div>
+      <div class="observation"><p id="background">Loading the background monitor’s last check…</p><p id="other-services" hidden></p></div>
+    </section>
+    <footer>This page is hosted separately and stays available if the home server goes offline. Reachability does not test video playback.</footer>
+    <noscript><p>Enable JavaScript to check status, or <a href="https://teleseerr.cn.lt">try opening Teleseerr</a>.</p></noscript>
+  </main>
+  <script src="./status.js"></script>
+</body>
+</html>
