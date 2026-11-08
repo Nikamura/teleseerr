@@ -1,3 +1,4 @@
+import { icon } from "./icons.js";
 import { createRequestQueue } from "./request-queue.js";
 
 const enqueueRequest = createRequestQueue();
@@ -232,13 +233,8 @@ export function statusText(status) {
  * @returns {string}
  */
 export function statusIcon(status) {
-  switch (status) {
-    case 5: return "&#9989;";
-    case 4: return "&#128993;";
-    case 3: return "&#9881;&#65039;";
-    case 2: return "&#9203;";
-    default: return "&#128308;";
-  }
+  return icon(status === 5 ? "check" : status === 3 ? "tray" : "compass",16);
+
 }
 
 /**

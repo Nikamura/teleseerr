@@ -1,3 +1,4 @@
+import { icon } from "./icons.js";
 import {
   tg, isTelegramWebApp, api,
   posterUrl, escHtml, formatDate,
@@ -21,11 +22,11 @@ export async function loadRequests(view) {
     const data = await api("/api/requests?page=1");
 
     if (data.results.length === 0) {
-      view.innerHTML = '<div class="empty">No requests yet. Start exploring and plunder some media!</div>';
+      view.innerHTML = '<div class="empty">Your next movie night starts here. Find a title in Discover to make your first request.</div>';
       return;
     }
 
-    view.innerHTML = "";
+    view.innerHTML = '<div class="page-heading"><p class="section-kicker">Your watch queue</p><h1>Requests</h1><p>From “I need to see this” to ready to watch.</p></div>';
     renderRequestList(data.results, view);
 
     if (data.pageInfo.pages > 1) {
@@ -65,7 +66,7 @@ export function renderRequestList(items, container, append = false) {
       ? `<img class="request-poster" src="${posterUrl(item.posterPath, "w200")}" alt="" loading="lazy">`
       : '<div class="request-poster request-poster-empty"></div>';
 
-    const typeIcon = item.mediaType === "movie" ? "&#127916;" : "&#128250;";
+    const typeIcon = icon(item.mediaType === "movie" ? "film" : "tv",16);
     const statusCls = requestStatusClass(item.status);
 
     el.innerHTML = `
@@ -92,11 +93,13 @@ export function initProfileBtn() {
 
 /** @returns {Promise<void>} */
 export async function showProfile() {
+  document.body.dataset.screen = "profile";
   const userState = getUserState();
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
   const view = document.getElementById("profile-view");
   view.classList.add("active");
+  document.querySelector('.primary-nav [data-tab="profile"]')?.classList.add("active");
   removeRequestBar();
 
   view.innerHTML = `
@@ -131,21 +134,9 @@ export async function showProfile() {
     };
   }
 
-  document.getElementById("profile-back-btn").onclick = () => {
-    view.classList.remove("active");
-    document.getElementById(`${getCurrentTab()}-view`).classList.add("active");
-    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", /** @type {HTMLElement} */ (t).dataset.tab === getCurrentTab()));
-  };
-
-  if (tg) {
-    tg.BackButton.show();
-    tg.BackButton.onClick(() => {
-      view.classList.remove("active");
-      document.getElementById(`${getCurrentTab()}-view`).classList.add("active");
-      document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", /** @type {HTMLElement} */ (t).dataset.tab === getCurrentTab()));
-      tg.BackButton.hide();
-    });
-  }
+  const back = () => { /** @type {HTMLButtonElement} */ (document.querySelector('.primary-nav [data-tab="trending"]')).click(); };
+  document.getElementById("profile-back-btn").onclick = back;
+  if (tg) { tg.BackButton.show(); tg.BackButton.onClick(back); }
 
   // Load quota
   if (userState.linked) {
@@ -202,7 +193,7 @@ export function showUnlinked() {
   view.classList.add("active");
   view.innerHTML = `
     <div class="unlinked-screen">
-      <div class="unlinked-icon">&#9203;</div>
+      <div class="unlinked-icon">${icon("user",40)}</div>
       <h2 class="unlinked-title">Waiting for access</h2>
       <p class="unlinked-text">The admin has been notified. You'll get a message once your account is linked.</p>
       <div class="unlinked-id-box">
@@ -224,9 +215,9 @@ export function showLoginScreen() {
   view.classList.add("active");
   view.innerHTML = `
     <div class="unlinked-screen">
-      <div class="unlinked-icon">&#9875;</div>
-      <h2 class="unlinked-title">Ahoy, sailor!</h2>
-      <p class="unlinked-text">Log in with your Telegram account to start plundering media.</p>
+      <div class="unlinked-icon">${icon("play",40)}</div>
+      <h2 class="unlinked-title">Your next favorite awaits.</h2>
+      <p class="unlinked-text">Sign in with Telegram to discover and request your next movie or series.</p>
       <div id="telegram-login-wrap"></div>
     </div>`;
 

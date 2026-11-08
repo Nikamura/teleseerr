@@ -240,3 +240,24 @@ request labels follow their respective library tiers.
 Season controls remain usable when direct Sonarr status is unconfigured or
 unavailable. Episode recovery still requires Manage downloads and a show already
 in Sonarr; monitoring alone is labelled as monitoring, not as a Seerr request.
+
+### Replacing an available episode
+
+Users with **Manage downloads** can choose **Replace episode** on an available
+single-episode file. The picker uses Sonarr's eligible releases and preserves all
+rejection rules (including quality/cutoff rules); this is not a forced downgrade
+or a promise that every same-quality release is selectable. Season packs and
+files shared by several episodes are excluded. An active transfer should be
+handled using **Find alternatives** instead.
+
+The server checks series/episode/file identity before search and again before the
+grab. A file change, revoked permission, or new active transfer prevents the
+operation. The existing per-title cooldown, expiring selection tokens and audit
+log apply. Teleseerr never deletes the existing episode file or a queue entry as
+part of this action. Sonarr handles replacing the file during import; until
+then the current file remains. A successful grab means accepted for downloading,
+not a verified repair or successful import.
+
+The configured administrator always has Manage downloads. Other linked users
+receive it through **Admin → Linked Users → Manage downloads**, separately from
+Seerr request approval/quotas. Revocation takes effect on the next server request.

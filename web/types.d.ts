@@ -1,4 +1,5 @@
 interface TelegramWebApp {
+  colorScheme?: "dark" | "light";
   ready(): void;
   expand(): void;
   initData: string;

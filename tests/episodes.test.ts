@@ -10,7 +10,7 @@ Object.assign(process.env, { TELEGRAM_BOT_TOKEN:"dummy", SEERR_URL:"https://seer
 const originalFetch = globalThis.fetch;
 after(() => { globalThis.fetch = originalFetch; rmSync(dir,{recursive:true,force:true}); });
 const series = { id:523,tmdbId:292108,tvdbId:466276,monitored:true };
-const missing = {id:40548,seriesId:523,seasonNumber:1,episodeNumber:6,title:"Episode 6",airDateUtc:"2026-08-21T20:30:00Z",hasFile:false,monitored:true};
+const missing = {id:40548,seriesId:523,seasonNumber:1,episodeNumber:6,title:"Episode 6",airDateUtc:"2026-08-21T20:30:00Z",hasFile:false,episodeFileId:0,monitored:true};
 const release = {guid:"safe",indexerId:1,title:"Ann.Droid.S01E06.1080p.WEB",size:100,protocol:"torrent",downloadAllowed:true,rejections:[],seasonNumber:1,episodeNumbers:[6]};
 let episode = {...missing};
 let entries: any[] = [];
@@ -26,6 +26,7 @@ beforeEach(() => {
     let value:unknown;
     if(u.hostname==="seerr.invalid") value={id:292108,externalIds:{tvdbId:466276}};
     else if(u.pathname==="/api/v3/series") value=[series];
+    else if(u.pathname==="/api/v3/episodefile/999") value={id:999,seriesId:523,sceneName:"Current.Release"};
     else if(u.pathname==="/api/v3/episode/40548") value=episode;
     else if(u.pathname==="/api/v3/episode") value=[...Array.from({length:5},(_,i)=>({...missing,id:40543+i,episodeNumber:i+1,title:`Episode ${i+1}`,hasFile:true})),episode];
     else if(u.pathname==="/api/v3/queue") value={records:entries,totalRecords:entries.length};
@@ -38,10 +39,10 @@ function context(user:number,body:unknown={},params:Record<string,string>={}):{c
  let output:any;
  return {ctx:{auth:{valid:true,userId:user},params,req:Readable.from([Buffer.from(JSON.stringify(body))]),res:{writeHead(){},end(s:string){output=JSON.parse(s);}}} as unknown as RouteContext,result:()=>output};
 }
-async function search(){
+async function search(replaceExisting=false){
  const {accountStore}=await import('../src/stores.js');const {handleReleaseSearch}=await import('../src/routes/downloads.js');
  const user=nextUser++;accountStore.set({telegramUserId:user,seerrUserId:user,seerrUsername:'tester',linkedAt:1,manageDownloads:true});
- const c=context(user,{instance:'sonarr',tmdbId:292108,episodeId:40548});await handleReleaseSearch(c.ctx);return {user,...c.result()};
+ const c=context(user,{instance:'sonarr',tmdbId:292108,episodeId:40548,replaceExisting});await handleReleaseSearch(c.ctx);return {user,...c.result()};
 }
 test('Ann Droid exposes all six episodes with the missing episode searchable without a queue',async()=>{
  const {handleDownloads}=await import('../src/routes/downloads.js');
@@ -96,4 +97,41 @@ test('episode states distinguish import, missing, unknown date and unaired',asyn
  assert.equal(episodeState({...missing,airDateUtc:'2099-01-01'},[]),'unaired');
  assert.equal(episodeState({...missing,airDateUtc:undefined},[]),'unknown');
  assert.equal(episodeState(missing,[{id:2,downloadId:'x',title:'x',size:1,sizeleft:0,status:'completed'}]),'importing');
+});
+
+test('available episode replacement grabs one episode and never deletes the library file or queue',async()=>{
+ episode.hasFile=true;episode.episodeFileId=999;episode.monitored=false;
+ const data=await search(true);assert.equal(data.action,'replace-file');
+ const {handleReleaseSwitch}=await import('../src/routes/downloads.js');
+ const c=context(data.user,{token:data.token,index:0,confirmed:true});await handleReleaseSwitch(c.ctx);
+ assert.equal(c.result().success,true);assert.match(c.result().message,/current file stays/);
+ assert.deepEqual(calls.find(c=>c.method==='POST')?.body,{guid:'safe',indexerId:1,seriesId:523,episodeIds:[40548]});
+ assert.equal(calls.some(c=>['DELETE','PUT'].includes(c.method)),false);
+ assert.equal(episode.hasFile,true);
+});
+test('replacement requires permission and unchanged file identity and refuses active transfers',async()=>{
+ const {handleReleaseSearch,handleReleaseSwitch}=await import('../src/routes/downloads.js');
+ await assert.rejects(handleReleaseSearch(context(888,{instance:'sonarr',tmdbId:292108,episodeId:40548,replaceExisting:true}).ctx),/permission/);
+ episode.hasFile=true;episode.episodeFileId=999;
+ const data=await search(true);episode.hasFile=false;
+ await assert.rejects(handleReleaseSwitch(context(data.user,{token:data.token,index:0,confirmed:true}).ctx),/file has changed/);
+ episode.hasFile=true;entries=[{id:4,seriesId:523,episodeId:40548,downloadId:'new',size:10,sizeleft:8,status:'downloading'}];
+ await assert.rejects(search(true),/already active/);
+ assert.equal(calls.some(c=>c.method==='POST'),false);
+});
+test('available replacement keeps rejection rules and refuses the current release and packs',async()=>{
+ episode.hasFile=true;episode.episodeFileId=999;
+ releases=[{...release,title:'Current.Release'},{...release,fullSeason:true},{...release,rejected:true,rejections:['Existing file meets cutoff']}];
+ const data=await search(true);assert.ok(data.releases.every((r:any)=>r.problems.length>0));
+ const {handleReleaseSwitch}=await import('../src/routes/downloads.js');
+ await assert.rejects(handleReleaseSwitch(context(data.user,{token:data.token,index:0,confirmed:true}).ctx),/eligible/);
+ assert.equal(calls.some(c=>c.method==='POST'),false);
+});
+test('replacement visibility requires both a confirmed file and download-management permission',async()=>{
+ episode.hasFile=true;episode.episodeFileId=999;
+ const {handleDownloads}=await import('../src/routes/downloads.js');
+ const admin=context(1,{}, {type:'tv',id:'292108'});await handleDownloads(admin.ctx);
+ assert.equal(admin.result().libraries[0].episodes.find((e:any)=>e.id===40548).canReplaceFile,true);
+ const reader=context(888,{}, {type:'tv',id:'292108'});await handleDownloads(reader.ctx);
+ assert.equal(reader.result().libraries[0].episodes.find((e:any)=>e.id===40548).canReplaceFile,false);
 });

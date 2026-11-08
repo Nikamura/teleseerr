@@ -20,6 +20,7 @@ type QueueItem = {
   movieId?: number;
   seriesId?: number;
   episodeId?: number;
+  episodeFileId?: number;
   title: string;
   size: number;
   sizeleft: number;
@@ -55,10 +56,11 @@ type Episode = {
   title: string;
   airDateUtc?: string;
   hasFile: boolean;
+  episodeFileId?: number;
   monitored: boolean;
 };
 type Series = { id: number; tmdbId?: number; tvdbId?: number; monitored: boolean };
-type MissingTarget = { tmdbId: number; episodeId: number };
+type MissingTarget = { tmdbId: number; episodeId: number; replaceExisting?: boolean };
 type Selection = {
   user: number;
   instance: ArrInstance;
@@ -271,14 +273,45 @@ async function missingGroup(instance: ArrInstance, target: MissingTarget): Promi
   )
     throw new ClientError(400, "Invalid episode target");
   const series = await findSeries(instance, target.tmdbId);
-  if (!series?.monitored) throw new ClientError(409, "Series is not monitored in the library");
+  if (!series || (!target.replaceExisting && !series.monitored))
+    throw new ClientError(409, "Series is not monitored in the library");
   const episode = await arr<Episode>(instance, `episode/${target.episodeId}`);
   if (episode.seriesId !== series.id)
     throw new ClientError(400, "Episode does not belong to this series");
   const transfers = (await queue(instance)).filter(
     (i) => i.seriesId === series.id && i.episodeId === episode.id,
   );
-  if (!episode.monitored || episodeState(episode, transfers) !== "missing")
+  let currentTitle = "";
+  if (target.replaceExisting) {
+    if (
+      !episode.hasFile ||
+      !Number.isSafeInteger(episode.episodeFileId) ||
+      Number(episode.episodeFileId) <= 0
+    )
+      throw new ClientError(409, "Episode file has changed or is unavailable. Refresh episodes.");
+    if (
+      transfers.some(
+        (i) => editable(i) || ["importPending", "importing"].includes(i.trackedDownloadState ?? ""),
+      )
+    )
+      throw new ClientError(
+        409,
+        "An episode transfer is already active. Use Find alternatives or wait for import.",
+      );
+    const episodes = await arr<Episode[]>(instance, `episode?seriesId=${series.id}`);
+    if (episodes.some((e) => e.id !== episode.id && e.episodeFileId === episode.episodeFileId))
+      throw new ClientError(
+        409,
+        "This file contains multiple episodes. Ask the admin to replace it in Sonarr.",
+      );
+    const file = await arr<{ id: number; seriesId: number; sceneName?: string }>(
+      instance,
+      `episodefile/${episode.episodeFileId}`,
+    );
+    if (file.id !== episode.episodeFileId || file.seriesId !== series.id)
+      throw new ClientError(409, "Episode file mapping is ambiguous");
+    currentTitle = file.sceneName ?? "";
+  } else if (!episode.monitored || episodeState(episode, transfers) !== "missing")
     throw new ClientError(
       409,
       "Episode is no longer missing, is not monitored, or has not aired. Refresh episodes.",
@@ -287,7 +320,8 @@ async function missingGroup(instance: ArrInstance, target: MissingTarget): Promi
     {
       id: 0,
       downloadId: "",
-      title: "",
+      title: currentTitle,
+      ...(target.replaceExisting ? { episodeFileId: episode.episodeFileId } : {}),
       size: 0,
       sizeleft: 0,
       status: "missing",
@@ -472,6 +506,15 @@ export async function handleDownloads({ auth, params, res }: RouteContext): Prom
               state,
               percent,
               monitored: !!series?.monitored && episode.monitored,
+              canReplaceFile:
+                canManage &&
+                state === "available" &&
+                Number(episode.episodeFileId) > 0 &&
+                !transfers.some(
+                  (i) =>
+                    editable(i) ||
+                    ["importPending", "importing"].includes(i.trackedDownloadState ?? ""),
+                ),
               canSearch:
                 canManage &&
                 ((state === "missing" && !!series?.monitored && episode.monitored) || !!transfer),
@@ -530,6 +573,7 @@ export async function handleReleaseSearch({ auth, req, res }: RouteContext): Pro
       ? {
           tmdbId: Number(body["tmdbId"]),
           episodeId: Number(body["episodeId"]),
+          replaceExisting: body["replaceExisting"] === true,
         }
       : undefined;
   const group = missing
@@ -561,7 +605,7 @@ export async function handleReleaseSearch({ auth, req, res }: RouteContext): Pro
   json(res, {
     token,
     pack: group.length > 1,
-    action: missing ? "download" : "replace",
+    action: missing?.replaceExisting ? "replace-file" : missing ? "download" : "replace",
     releases: releases.map((r, index) => ({
       index,
       title: r.title,
@@ -609,7 +653,8 @@ export async function handleReleaseSwitch({ auth, req, res }: RouteContext): Pro
               old.downloadId === i.downloadId &&
               old.episodeId === i.episodeId &&
               old.movieId === i.movieId &&
-              old.seriesId === i.seriesId,
+              old.seriesId === i.seriesId &&
+              old.episodeFileId === i.episodeFileId,
           ),
       )
     )
@@ -621,7 +666,11 @@ export async function handleReleaseSwitch({ auth, req, res }: RouteContext): Pro
       auth.userId,
       instance.name,
       firstItem(group).id,
-      selection.missing ? "download_attempted" : "switch_attempted",
+      selection.missing?.replaceExisting
+        ? "file_replacement_attempted"
+        : selection.missing
+          ? "download_attempted"
+          : "switch_attempted",
       selection.missing?.episodeId,
     );
     try {
@@ -648,8 +697,22 @@ export async function handleReleaseSwitch({ auth, req, res }: RouteContext): Pro
       );
     }
     if (selection.missing) {
-      audit(auth.userId, instance.name, 0, "download_accepted", selection.missing.episodeId);
-      json(res, { success: true });
+      audit(
+        auth.userId,
+        instance.name,
+        0,
+        selection.missing.replaceExisting ? "file_replacement_accepted" : "download_accepted",
+        selection.missing.episodeId,
+      );
+      json(res, {
+        success: true,
+        ...(selection.missing.replaceExisting
+          ? {
+              message:
+                "Replacement download accepted. The current file stays while it downloads; Sonarr will handle replacement during import.",
+            }
+          : {}),
+      });
       return;
     }
     // Grab succeeded. Only remove the original identity, never a refreshed/new queue ID.

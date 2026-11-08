@@ -1,5 +1,6 @@
-import { api, escHtml, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
-import { renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore } from "./grid.js";
+import { icon } from "./icons.js";
+import { api, escHtml, posterUrl, year, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
+import { renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore, openMedia } from "./grid.js";
 
 // ── Discover Page (Trending tab) ────────────
 
@@ -11,15 +12,15 @@ export async function loadDiscoverPage(view) {
   view.innerHTML = '<div class="spinner" style="width:24px;height:24px;margin:40px auto"></div>';
 
   const sections = [
-    { title: "Trending", endpoint: "/api/trending?page=1", key: "trending" },
-    { title: "Recently Added", endpoint: "/api/recently-added?page=1", key: "recently-added" },
+    { title: "Trending now", endpoint: "/api/trending?page=1", key: "trending" },
+    { title: "Fresh in your library", endpoint: "/api/recently-added?page=1", key: "recently-added" },
     { title: "Popular Movies", endpoint: "/api/discover/movie?page=1&sortBy=popularity.desc", key: "popular-movies" },
     { title: "Popular TV Shows", endpoint: "/api/discover/tv?page=1&sortBy=popularity.desc", key: "popular-tv" },
     { title: "Upcoming Movies", endpoint: "/api/discover/upcoming/movie?page=1", key: "upcoming-movies" },
     { title: "Upcoming TV Shows", endpoint: "/api/discover/upcoming/tv?page=1", key: "upcoming-tv" },
   ];
 
-  view.innerHTML = "";
+  view.innerHTML = '<div id="discover-spotlight" class="spotlight-placeholder skeleton" aria-label="Loading featured title"></div>';
 
   for (const section of sections) {
     const container = document.createElement("div");
@@ -54,10 +55,22 @@ export async function loadDiscoverSection(section, container) {
       return;
     }
 
+    if (section.key === "trending") {
+      const host = document.getElementById("discover-spotlight");
+      const featured = items.find(item => item.backdropPath) ?? items[0];
+      if (host && featured) {
+        host.className = "spotlight-host";
+        host.innerHTML = `<button class="spotlight" aria-label="View ${escHtml(featured.title ?? featured.name)}"><img src="${posterUrl(featured.backdropPath ?? featured.posterPath, "w1280")}" alt=""><span class="spotlight-scrim"></span><span class="spotlight-copy"><span class="spotlight-eyebrow">In the spotlight</span><span class="spotlight-title">${escHtml(featured.title ?? featured.name)}</span><span class="spotlight-meta">${year(featured.releaseDate ?? featured.firstAirDate)} · ${featured.mediaType === "tv" ? "TV series" : "Movie"}</span></span><span class="spotlight-open">${icon("arrow",24)}</span></button>`;
+        const image = host.querySelector("img");
+        image.onerror = () => { image.style.visibility = "hidden"; };
+        host.querySelector("button").onclick = () => openMedia(featured.mediaType, featured.id);
+      }
+    }
     for (const item of items) {
       row.appendChild(renderSliderCard(item));
     }
   } catch {
+    if (section.key === "trending") document.getElementById("discover-spotlight")?.remove();
     container.querySelector(".slider-row").innerHTML = '<div class="empty" style="padding:12px;font-size:12px">Failed to load</div>';
   }
 }

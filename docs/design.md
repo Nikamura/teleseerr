@@ -1,0 +1,53 @@
+# Teleseerr interface
+
+Teleseerr is a personal cinema library inside Telegram. Artwork leads browsing;
+requests and download tools describe their actual state. Administration has its
+own People destination rather than competing with movie categories.
+
+## Navigation
+
+Mobile has a fixed bottom navigation: Discover, Requests, People (admin only),
+and You. Discover contains the For you, Movies, TV shows and Anime categories.
+All destinations fit without horizontal scrolling. Desktop moves the same
+navigation to the masthead. Detail pages retain Back and the existing request
+confirmation bar. A navigation change stops hidden progress polling.
+
+## Visual language
+
+Use the system sans-serif stack, warm charcoal/ivory neutrals and one amber
+interaction accent. Light Telegram themes use warm off-white with a darker
+amber for readable links. Green and warning tones describe status, not arbitrary
+brand accents. Keep text labels alongside status colors and icons.
+
+Use 8px action corners, 10–12px artwork/inputs, 14–16px containers, and circles
+only for avatars, switches and the featured-title opener. Use the outline SVG
+icons in `web/icons.js`; keep emoji out of interface chrome. Primary controls have a
+44px minimum interaction target. Reduced-motion settings disable decoration.
+
+The featured title is a real trending result and opens its details. It is not a
+playback control. Use upstream poster/backdrop images with a readable image
+scrim; generated concept art is not a runtime asset. Keep horizontal poster rows
+top-aligned, with readable names and years below the artwork.
+
+## People and actions
+
+A person's readable name/email leads; Telegram IDs and unlink controls live in
+Account details. Manage downloads is an explicit labelled switch with a pending
+state and rollback on failure. The configured administrator's switch stays
+disabled and enabled. Search filters linked members locally and has an explicit
+no-results state. Destructive unlink still requires confirmation.
+
+Keep request/approval, monitoring, downloading, import and availability distinct.
+Season and episode actions share one expandable list. Do not replace server
+permission checks with visual hiding, and do not interpret request acceptance as
+a completed download or repair.
+
+## Validation
+
+The facelift was inspected in the shared Chromium preview at 320×740, 430×932
+and 1440×1000 with isolated demo API responses, including light/dark People,
+long emails, no matches, permission success/rollback, browsing, title Back,
+profile navigation and a season-request submission. These checks do not establish
+production or native Telegram end-to-end behavior. Development-only captures and
+the source-hashed receipt are kept outside public assets under `.design/facelift`.
+No new runtime dependency was added.

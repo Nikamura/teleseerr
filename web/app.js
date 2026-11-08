@@ -1,8 +1,9 @@
-import { tg, isTelegramWebApp, api, setCurrentTab, setPreviousView, setUserState, getUserState, setCaps } from "./state.js";
+import { icon } from "./icons.js";
+import { tg, isTelegramWebApp, api, setCurrentTab, setPreviousView, setUserState, getUserState, setCaps, clearProgressPolling } from "./state.js";
 import { setCardClickHandler } from "./grid.js";
 import { loadDiscoverPage, loadGenreView, initSearch } from "./discover.js";
 import { openDetail, removeRequestBar } from "./detail.js";
-import { loadRequests, initProfileBtn, showUnlinked, showLoginScreen } from "./pages.js";
+import { loadRequests, initProfileBtn, showUnlinked, showLoginScreen, showProfile } from "./pages.js";
 import { showAdmin } from "./admin.js";
 
 // ── Wire up grid card clicks to detail view ──
@@ -23,8 +24,16 @@ function initTabs() {
  * @returns {void}
  */
 function switchTab(tab) {
+  clearProgressPolling();
   setCurrentTab(tab);
-  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", /** @type {HTMLElement} */ (t).dataset.tab === tab));
+  document.body.dataset.screen = tab;
+  window.scrollTo(0, 0);
+  document.querySelectorAll(".tab").forEach((t) => {
+    const target = /** @type {HTMLElement} */ (t).dataset.tab;
+    const active = target === tab || (t.closest(".primary-nav") && target === "trending" && ["movies", "tv", "anime"].includes(tab));
+    t.classList.toggle("active", !!active);
+    t.setAttribute("aria-current", active ? "page" : "false");
+  });
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
 
   const viewId = `${tab}-view`;
@@ -40,7 +49,8 @@ function switchTab(tab) {
   }
 
   const view = document.getElementById(viewId);
-  if (!view.children.length || (view.children.length === 1 && view.querySelector(".skeleton"))) {
+  if (tab === "profile") { void showProfile(); return; }
+  if (["admin", "requests"].includes(tab) || !view.children.length || (view.children.length === 1 && view.querySelector(".skeleton"))) {
     loadTabContent(tab);
   }
 
@@ -73,6 +83,7 @@ async function loadTabContent(tab) {
 
 /** @returns {Promise<void>} */
 async function init() {
+  if (window.Telegram?.WebApp?.colorScheme === "light") document.documentElement.dataset.theme = "light";
   // If not in Telegram and no saved login, show login screen
   if (!isTelegramWebApp && !localStorage.getItem("tg_login")) {
     setUserState({ linked: false, isAdmin: false, telegramUserId: 0 });
@@ -106,10 +117,13 @@ async function init() {
     const adminTab = document.createElement("button");
     adminTab.className = "tab";
     adminTab.dataset.tab = "admin";
-    adminTab.textContent = "Admin";
-    nav.appendChild(adminTab);
+    adminTab.innerHTML = `${icon("people")}<span>People</span>`;
+    nav.insertBefore(adminTab, nav.lastElementChild);
   }
 
+  document.querySelectorAll("[data-icon]").forEach(el => { el.innerHTML = icon(/** @type {HTMLElement} */ (el).dataset.icon, 23); });
+  document.querySelector(".brand").addEventListener("click", event => { event.preventDefault(); switchTab("trending"); });
+  document.body.dataset.screen = "trending";
   initTabs();
   initSearch();
   initProfileBtn();

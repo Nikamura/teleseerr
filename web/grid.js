@@ -1,3 +1,4 @@
+import { icon } from "./icons.js";
 import { posterUrl, year, statusBadge, escHtml } from "./state.js";
 
 // ── Card click handler (set by consumer to avoid circular imports) ──
@@ -10,6 +11,9 @@ let _cardClickHandler = null;
  * @returns {void}
  */
 export function setCardClickHandler(fn) { _cardClickHandler = fn; }
+
+/** @param {string} type @param {number} id */
+export function openMedia(type, id) { _cardClickHandler?.(type, id); }
 
 // ── Grid Rendering ───────────────────────────
 
@@ -35,18 +39,18 @@ export function renderGrid(items, container, append = false) {
         ? `<img src="${posterUrl(r.posterPath, "w342")}" alt="" loading="lazy">`
         : "";
       const rating = r.voteAverage
-        ? `<div class="card-rating">&#11088; ${r.voteAverage.toFixed(1)}</div>`
+        ? `<div class="card-rating">${icon("star",12)} ${r.voteAverage.toFixed(1)}</div>`
         : "";
 
       return `
-        <div class="media-card" data-type="${r.mediaType}" data-id="${r.id}">
+        <button type="button" class="media-card" data-type="${r.mediaType}" data-id="${r.id}">
           ${poster}
           ${badge}
           <div class="card-title">
             ${escHtml(name)} (${y})
             ${rating}
           </div>
-        </div>`;
+        </button>`;
     })
     .join("");
 
@@ -83,23 +87,27 @@ export function renderSkeletons(container, count = 9) {
 
 /**
  * @param {any} item
- * @returns {HTMLDivElement}
+ * @returns {HTMLButtonElement}
  */
 export function renderSliderCard(item) {
-  const card = document.createElement("div");
+  const card = document.createElement("button");
+  card.type = "button";
   card.className = "slider-card";
   const name = item.title ?? item.name ?? "Unknown";
+  card.setAttribute("aria-label", `View ${name}`);
   const y = year(item.releaseDate ?? item.firstAirDate);
   const badge = statusBadge(item.mediaInfo);
 
   card.innerHTML = `
     <div class="slider-card-img-wrap">
-      ${item.posterPath ? `<img class="slider-card-poster" src="${posterUrl(item.posterPath, "w185")}" alt="" loading="lazy">` : '<div class="slider-card-poster"></div>'}
+      ${item.posterPath ? `<img class="slider-card-poster" src="${posterUrl(item.posterPath, "w342")}" alt="" loading="lazy">` : '<div class="slider-card-poster"></div>'}
       ${badge}
     </div>
     <div class="slider-card-title">${escHtml(name)}</div>
     <div class="slider-card-sub">${y}</div>`;
 
+  const image = card.querySelector("img");
+  if (image) image.onerror = () => { image.style.visibility = "hidden"; };
   card.onclick = () => _cardClickHandler?.(item.mediaType, item.id);
   return card;
 }

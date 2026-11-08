@@ -1,32 +1,42 @@
+import { icon } from "./icons.js";
 import { api, apiPost, escHtml, showLoading, hideLoading, toast, getUserState } from "./state.js";
 
 // ── Admin Panel ──────────────────────────────
 
 /** @returns {Promise<void>} */
 export async function showAdmin() {
+  document.body.dataset.screen = "admin";
   const view = document.getElementById("admin-view");
   view.innerHTML = `
+    <div class="page-heading"><p class="section-kicker">Your shared library</p><h1>People</h1><p>Good movie nights start with good company.</p></div>
+    <div class="people-tools"><label class="people-search">${icon("search",18)}<input type="search" id="admin-user-filter" placeholder="Find a person" aria-label="Find a linked person"></label><a href="#admin-add-person" class="text-link">Link someone ${icon("arrow",16)}</a></div>
     <div class="admin-section" id="admin-pending-section" style="display:none">
       <div class="admin-section-title">Pending Requests</div>
       <div id="admin-pending-list"></div>
     </div>
     <div class="admin-section">
-      <div class="admin-section-title">Linked Users</div>
-      <div id="admin-users-list"><div class="spinner" style="width:20px;height:20px;margin:16px auto"></div></div>
+      <div class="admin-section-title">Library access <span id="admin-user-count"></span></div><p class="section-description">Choose who can recover downloads and replace episodes.</p>
+      <div id="admin-users-list"><div class="spinner" style="width:20px;height:20px;margin:16px auto"></div></div><p id="people-no-results" class="empty" hidden>No matching people. Try a different name or email.</p>
     </div>
-    <div class="admin-section">
-      <div class="admin-section-title">Link New User</div>
+    <details class="admin-section admin-add-person" id="admin-add-person"><summary>Link someone new</summary>
       <div class="admin-link-form">
-        <input type="number" id="admin-tg-id" placeholder="Telegram User ID" class="admin-input">
+        <label class="admin-field">Telegram user ID<input type="number" id="admin-tg-id" placeholder="e.g. 123456789" class="admin-input" inputmode="numeric"></label>
         <button class="admin-btn" id="admin-show-seerr">Find Seerr Users</button>
       </div>
       <div id="seerr-users-list"></div>
-    </div>
+    </details>
     <div class="admin-section" id="admin-ignored-section" style="display:none">
       <div class="admin-section-title admin-ignored-toggle" id="admin-ignored-toggle">Ignored Users <span class="admin-toggle-arrow">&#9654;</span></div>
       <div id="admin-ignored-list" style="display:none"></div>
     </div>`;
 
+  document.getElementById("admin-user-filter").oninput = (event) => {
+    const term = /** @type {HTMLInputElement} */ (event.target).value.trim().toLowerCase();
+    const rows = [...document.querySelectorAll(".admin-user-row")];
+    rows.forEach(row => { /** @type {HTMLElement} */ (row).hidden = !row.textContent.toLowerCase().includes(term); });
+    document.getElementById("people-no-results").hidden = rows.some(row => !/** @type {HTMLElement} */ (row).hidden);
+  };
+  document.querySelector('a[href="#admin-add-person"]').addEventListener("click", () => { /** @type {HTMLDetailsElement} */ (document.getElementById("admin-add-person")).open = true; });
   document.getElementById("admin-show-seerr").onclick = () => loadSeerrUsers(1);
   document.getElementById("admin-ignored-toggle").onclick = () => {
     const list = document.getElementById("admin-ignored-list");
@@ -48,15 +58,16 @@ export async function loadAdminUsers() {
       list.innerHTML = '<div class="empty" style="padding:12px">No linked users</div>';
       return;
     }
-    list.innerHTML = users.map((u) => `
-      <div class="admin-user-row">
-        <div class="admin-user-info">
-          <span class="admin-user-tg">TG: ${u.telegramUserId}</span>
-          <span class="admin-user-seerr">${escHtml(u.seerrUsername)}</span>
-        </div>
-        <label class="download-permission"><input type="checkbox" class="admin-download-permission" data-tg-id="${u.telegramUserId}" ${u.manageDownloads || u.telegramUserId === getUserState()?.telegramUserId ? "checked" : ""} ${u.telegramUserId === getUserState()?.telegramUserId ? "disabled" : ""}> Manage downloads</label>
-        <button class="admin-unlink-btn" data-tg-id="${u.telegramUserId}">Unlink</button>
-      </div>`).join("");
+    document.getElementById("admin-user-count").textContent = String(users.length);
+    list.innerHTML = users.map((u) => {
+      const owner = u.telegramUserId === getUserState()?.telegramUserId;
+      const name = (u.seerrUsername || "Library member").split("@")[0].replace(/[._-]+/g, " ");
+      return `<article class="admin-user-row">
+        <div class="person-identity"><div class="person-avatar" aria-hidden="true">${escHtml(name.slice(0,1).toUpperCase())}</div><div class="admin-user-info"><span class="person-name">${escHtml(name)}${owner ? '<span class="owner-label">You · Admin</span>' : ""}</span><span class="admin-user-seerr">${escHtml(u.seerrUsername)}</span></div></div>
+        <div class="person-permissions"><div><span class="permission-title">Manage downloads</span><span class="permission-description">Recover stuck downloads and replace files</span></div><label class="permission-switch"><input type="checkbox" role="switch" aria-label="Manage downloads for ${escHtml(name)}" class="admin-download-permission" data-tg-id="${u.telegramUserId}" ${u.manageDownloads || owner ? "checked" : ""} ${owner ? "disabled" : ""}><span aria-hidden="true"></span></label></div>
+        <details class="person-details"><summary>Account details</summary><div class="person-account"><span>Telegram ID <code>${u.telegramUserId}</code></span>${!owner ? `<button class="admin-unlink-btn" data-tg-id="${u.telegramUserId}">${icon("unlink",14)} Unlink account</button>` : '<span class="permission-description">Admin access is always enabled.</span>'}</div></details>
+      </article>`;
+    }).join("");
 
     list.querySelectorAll(".admin-download-permission").forEach((element) => {
       const input = /** @type {HTMLInputElement} */ (element);
@@ -75,10 +86,13 @@ export async function loadAdminUsers() {
       /** @type {HTMLElement} */ (btn).onclick = async () => {
         if (!confirm(`Unlink Telegram user ${/** @type {HTMLElement} */ (btn).dataset.tgId}?`)) return;
         showLoading();
-        await apiPost("/api/admin/unlink", { telegramUserId: Number(/** @type {HTMLElement} */ (btn).dataset.tgId) });
-        hideLoading();
-        toast("User unlinked");
-        loadAdminUsers();
+        try {
+          const response = await apiPost("/api/admin/unlink", { telegramUserId: Number(/** @type {HTMLElement} */ (btn).dataset.tgId) });
+          if (response.error) throw new Error(response.error);
+          toast("Account unlinked");
+          await loadAdminUsers();
+        } catch { toast("Could not unlink account. Please try again."); }
+        finally { hideLoading(); }
       };
     });
   } catch {
@@ -117,6 +131,7 @@ export async function loadPendingUsers() {
     list.querySelectorAll(".admin-link-pending-btn").forEach((btn) => {
       /** @type {HTMLElement} */ (btn).onclick = () => {
         /** @type {HTMLInputElement} */ (document.getElementById("admin-tg-id")).value = /** @type {HTMLElement} */ (btn).dataset.tgId;
+        /** @type {HTMLDetailsElement} */ (document.getElementById("admin-add-person")).open = true;
         loadSeerrUsers(1);
         document.getElementById("seerr-users-list").scrollIntoView({ behavior: "smooth", block: "start" });
       };

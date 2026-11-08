@@ -2,33 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Find Movies & TV Shows</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teleseerr · Find your next favorite</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="facelift.css">
 </head>
 <body>
   <div id="app">
-    <!-- Top bar: search + profile -->
-    <div class="top-bar">
-      <div class="search-bar">
-        <input type="text" id="search-input" placeholder="Search movies & shows..." autocomplete="off">
+    <header class="top-bar">
+      <div class="masthead"><a class="brand" href="#" aria-label="Teleseerr home"><span class="brand-mark"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="m8 5 11 7-11 7Z" fill="currentColor"/></svg></span>teleseerr</a>
+      <button class="profile-btn" id="profile-btn" title="Your account" aria-label="Your account"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></button></div>
+      <div class="discovery-intro"><h1>Find your next favorite.</h1><p>Movies, series, and a little obsession.</p></div>
+      <div class="search-bar"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input type="search" id="search-input" placeholder="Search movies, shows, people" aria-label="Search movies, shows and people" autocomplete="off"></div>
+      <div class="browse-tabs" aria-label="Browse categories">
+        <button class="tab browse-tab active" data-tab="trending">For you</button><button class="tab browse-tab" data-tab="movies">Movies</button><button class="tab browse-tab" data-tab="tv">TV shows</button><button class="tab browse-tab" data-tab="anime">Anime</button>
       </div>
-      <button class="profile-btn" id="profile-btn" title="Profile">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- Tab navigation -->
-    <nav class="tabs" id="tabs-nav">
-      <button class="tab active" data-tab="trending">Trending</button>
-      <button class="tab" data-tab="movies">Movies</button>
-      <button class="tab" data-tab="tv">TV Shows</button>
-      <button class="tab" data-tab="anime">Anime</button>
-      <button class="tab" data-tab="requests">My Requests</button>
+    </header>
+    <nav class="tabs primary-nav" id="tabs-nav" aria-label="Main navigation">
+      <button class="tab active" data-tab="trending"><span data-icon="compass"></span><span>Discover</span></button>
+      <button class="tab" data-tab="requests"><span data-icon="tray"></span><span>Requests</span></button>
+      <button class="tab" data-tab="profile"><span data-icon="user"></span><span>You</span></button>
     </nav>
 
     <!-- Content area -->

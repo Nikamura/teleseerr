@@ -1,3 +1,4 @@
+import { icon } from "./icons.js";
 import { mountDownloads } from "./downloads.js";
 import {
   tg, TMDB_IMG, api, apiPost,
@@ -77,7 +78,7 @@ function startProgressPolling(type, tmdbId, tvdbId) {
       const qs = type === "tv" && tvdbId ? `?tvdbId=${tvdbId}` : "";
       const progress = await api(`/api/${type}/${tmdbId}/progress${qs}`);
       const el = document.getElementById("download-progress-container");
-      if (!el) {
+      if (!el || !el.closest(".view")?.classList.contains("active")) {
         clearProgressPolling();
         return;
       }
@@ -158,6 +159,7 @@ export function getCertification(d, type) {
  * @returns {void}
  */
 export function renderDetail(type, d) {
+  document.body.dataset.screen = "detail";
   const caps = getCaps();
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
   const view = document.getElementById("detail-view");
@@ -178,7 +180,7 @@ export function renderDetail(type, d) {
 
   /** @type {string[]} */
   let meta = [];
-  if (d.voteAverage) meta.push(`<span class="pill">&#11088; ${d.voteAverage.toFixed(1)}</span>`);
+  if (d.voteAverage) meta.push(`<span class="pill">${icon("star",14)} ${d.voteAverage.toFixed(1)}</span>`);
   if (cert) meta.push(`<span class="pill">${escHtml(cert)}</span>`);
   if (type === "movie" && d.runtime) meta.push(`<span class="pill">${d.runtime} min</span>`);
   if (type === "tv" && d.numberOfSeasons) meta.push(`<span class="pill">${d.numberOfSeasons} Season${d.numberOfSeasons > 1 ? "s" : ""}</span>`);
@@ -255,7 +257,7 @@ export function renderDetail(type, d) {
   if (type === "movie") {
     view.innerHTML = html;
     if (status !== 5 && status !== 2 && status !== 3) {
-      showRequestBar("Plunder It!", async () => {
+      showRequestBar("Request movie", async () => {
         showLoading();
         const result = await apiPost("/api/request", {
           mediaType: "movie",
@@ -267,10 +269,10 @@ export function renderDetail(type, d) {
           removeRequestBar();
           if (result.status === 2) {
             toast("Request approved!");
-            view.querySelector(".detail-status").innerHTML = "&#9881;&#65039; Approved &mdash; downloading";
+            view.querySelector(".detail-status").innerHTML = `${icon("check",16)} Request approved`;
           } else {
             toast("Request submitted!");
-            view.querySelector(".detail-status").innerHTML = "&#9203; Requested";
+            view.querySelector(".detail-status").innerHTML = "Request submitted";
           }
         } else {
           toast(formatError(result.error));
@@ -345,7 +347,7 @@ export function renderCastGrid(cast) {
   for (const c of cast) {
     const photo = c.profilePath
       ? `<img class="cast-photo" src="${TMDB_IMG}/w185${c.profilePath}" alt="" loading="lazy">`
-      : '<div class="cast-photo cast-photo-empty">&#128100;</div>';
+      : `<div class="cast-photo cast-photo-empty">${icon("user",28)}</div>`;
     html += `
       <div class="cast-card" data-person-id="${c.id}">
         ${photo}
@@ -389,6 +391,7 @@ export async function loadDetailSlider(endpoint, containerId, title) {
 
 /** @returns {void} */
 export function goBack() {
+  document.body.dataset.screen = getCurrentTab();
   clearProgressPolling();
   document.getElementById("detail-view").classList.remove("active");
   removeRequestBar();
@@ -566,6 +569,7 @@ export async function openPerson(personId) {
  * @returns {void}
  */
 export function renderPerson(person) {
+  document.body.dataset.screen = "detail";
   const navigationStack = getNavigationStack();
   const currentDetail = getCurrentDetail();
 
@@ -729,7 +733,7 @@ export function showRequestBar(label, handler, show4k = false) {
   const bar = document.createElement("div");
   bar.className = "request-bar";
   bar.id = "request-bar";
-  bar.innerHTML = `${show4k ? '<label class="request-bar-4k"><input type="checkbox" id="request-4k-cb"> 4K</label>' : ""}<button>&#9875; ${escHtml(label)}</button>`;
+  bar.innerHTML = `${show4k ? '<label class="request-bar-4k"><input type="checkbox" id="request-4k-cb"> 4K</label>' : ""}<button>${escHtml(label)}</button>`;
   bar.querySelector("button").onclick = handler;
   document.body.appendChild(bar);
 }
