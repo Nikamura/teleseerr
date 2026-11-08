@@ -207,6 +207,14 @@ test("failed request retry uses the owner's Seerr identity, available requests c
 
 test("library refresh maps exactly one title and never accepts a user-supplied path or scan scope", async () => {
   const { handleSupportAction } = await import("../src/routes/support.js");
+  const { accountStore } = await import("../src/stores.js");
+  accountStore.set({
+    telegramUserId: 123,
+    seerrUserId: 123,
+    seerrUsername: "refresh-test",
+    linkedAt: 1,
+    manageDownloads: true,
+  });
   const commands: any[] = [];
   globalThis.fetch = async (url, init) => {
     if (init?.method === "POST") {
@@ -226,7 +234,7 @@ test("library refresh maps exactly one title and never accepts a user-supplied p
     /Manage downloads/,
   );
   await handleSupportAction(
-    ctx(1, {
+    ctx(123, {
       instance: "radarr",
       action: "refresh-library",
       tmdbId: 321,
@@ -239,7 +247,7 @@ test("library refresh maps exactly one title and never accepts a user-supplied p
   await assert.rejects(
     () =>
       handleSupportAction(
-        ctx(1, { instance: "radarr", action: "refresh-library", tmdbId: 999, confirmed: true }),
+        ctx(123, { instance: "radarr", action: "refresh-library", tmdbId: 999, confirmed: true }),
       ),
     /mapping/,
   );
