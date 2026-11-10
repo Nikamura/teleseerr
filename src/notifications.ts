@@ -4,7 +4,8 @@ import { config } from "./config.js";
 import { RetryQueue } from "./retry.js";
 import { NotificationDelivery } from "./notification-delivery.js";
 import { waitingForRelease } from "./arr/availability.js";
-import type { Bot } from "grammy";
+import { cleanupStatus } from "./arr/cleanup.js";
+import { GrammyError, InlineKeyboard, type Bot } from "grammy";
 import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
 import * as seerr from "./seerr/client.js";
@@ -57,23 +58,101 @@ export function startRetries(bot: Bot): void {
   }, 1000).unref();
 }
 
+// Telegram's free "🎉" message effect (private chats only). The ID cannot be checked without a
+// client, so a rejected effect is resent without it rather than losing the notification.
+const AVAILABLE_EFFECT_ID = "5046509860389126442";
+
+type Target = { type: string; tmdbId: number };
+
+function titleKeyboard(target: Target | undefined, highlight: boolean): InlineKeyboard | undefined {
+  if (!config.MINI_APP_URL || !target || (target.type !== "movie" && target.type !== "tv"))
+    return undefined;
+  const keyboard = new InlineKeyboard().webApp(
+    "Open title",
+    new URL(`/${target.type}/${target.tmdbId}`, config.MINI_APP_URL).href,
+  );
+  // Button styles (Bot API 9.4) are ignored by older clients.
+  return highlight ? keyboard.success() : keyboard;
+}
+
 async function sendNotification(
   bot: Bot,
   userId: number,
   requestId: number,
   type: string,
   message: string,
+  target?: Target,
 ): Promise<void> {
   const event = type === "MEDIA_AUTO_APPROVED" ? "MEDIA_APPROVED" : type;
+  const available = event === "MEDIA_AVAILABLE";
+  const keyboard = titleKeyboard(target, available);
+  const options = {
+    parse_mode: "MarkdownV2" as const,
+    ...(keyboard ? { reply_markup: keyboard } : {}),
+  };
   await delivery.send(`${requestId}:${event}:${userId}`, async () => {
-    await bot.api.sendMessage(userId, message, { parse_mode: "MarkdownV2" });
+    if (!available) {
+      await bot.api.sendMessage(userId, message, options);
+      return;
+    }
+    try {
+      await bot.api.sendMessage(userId, message, {
+        ...options,
+        message_effect_id: AVAILABLE_EFFECT_ID,
+      });
+    } catch (error) {
+      if (!(error instanceof GrammyError) || error.error_code !== 400) throw error;
+      await bot.api.sendMessage(userId, message, options);
+    }
   });
 }
 
-async function approvalMessage(title: string, request: seerr.RequestDetails): Promise<string> {
-  return (await waitingForRelease(request))
-    ? "🕒 *" + escNotify(title) + "* has been approved and is waiting for release availability\\."
-    : "⚙️ *" + escNotify(title) + "* has been approved and queued for processing\\!";
+/**
+ * MarkdownV2 date_time entity (Bot API 9.5): rendered in the reader's timezone and locale. The
+ * UTC text is what older clients and notifications show.
+ */
+export function dateTime(ms: number, format: "D" | "t" | "dt"): string {
+  const unix = Math.floor(ms / 1000);
+  const at = new Date(unix * 1000);
+  const date = at.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const time = at.toISOString().slice(11, 16) + " UTC";
+  const text = format === "D" ? date : format === "t" ? time : `${date} ${time}`;
+  return `![${escNotify(text)}](tg://time?unix=${unix}&format=${format})`;
+}
+
+async function approvalMessage(
+  title: string,
+  request: seerr.RequestDetails,
+  releaseDate?: string,
+): Promise<string> {
+  if (!(await waitingForRelease(request)))
+    return "⚙️ *" + escNotify(title) + "* has been approved and queued for processing\\!";
+  const release = Date.parse(releaseDate ?? "");
+  // A release date is a calendar day, not an instant: noon UTC keeps the same day in most zones.
+  const day = Math.floor(release / 86400_000) * 86400_000 + 43200_000;
+  return (
+    "🕒 *" +
+    escNotify(title) +
+    "* has been approved and is waiting for release availability\\." +
+    (Number.isFinite(release) && day > Date.now() ? ` Release date: ${dateTime(day, "D")}\\.` : "")
+  );
+}
+
+async function cleanupNote(type: string, tmdbId: number): Promise<string> {
+  const { items } = await cleanupStatus(type, tmdbId);
+  // Season-level cleanup may concern a season other than the requested one; skip it.
+  const times = items
+    .filter((item) => item.season === null)
+    .map((item) => Date.parse(item.eligibleAt ?? ""))
+    .filter((time) => Number.isFinite(time) && time > Date.now());
+  return times.length
+    ? `\n🧹 Library cleanup may remove it from ${dateTime(Math.min(...times), "D")}\\.`
+    : "";
 }
 
 // ── Helpers ───────────────────────────────────────
@@ -119,6 +198,10 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
   if (userId === undefined) return;
   // Titles come from the authenticated Seerr API, never webhook-controlled text.
   let title = "Request #" + String(requestId);
+  let releaseDate: string | undefined;
+  const target = request.media?.tmdbId
+    ? { type: request.type, tmdbId: request.media.tmdbId }
+    : undefined;
   if (request.media?.tmdbId) {
     try {
       const details =
@@ -126,6 +209,7 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
           ? await seerr.getMovieDetails(request.media.tmdbId)
           : await seerr.getTvDetails(request.media.tmdbId);
       title = ("title" in details ? details.title : details.name) ?? title;
+      releaseDate = details.releaseDate;
     } catch {
       /* Safe request-ID fallback; never fall back to webhook subject. */
     }
@@ -133,13 +217,22 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
   let message = buildMessage(type, title);
   if (!message) return;
   if (type === "MEDIA_AVAILABLE" || type === "MEDIA_DECLINED") retryQueue?.cancel(requestId);
+  if (type === "MEDIA_AVAILABLE" && target)
+    message += await cleanupNote(target.type, target.tmdbId);
   if (type === "MEDIA_FAILED" && retryQueue?.enqueue(requestId, request.requestedBy.id)) {
-    message = "⚠️ *" + escNotify(title) + "* request failed\\. Automatic retries are scheduled\\.";
+    const due = retryQueue.due(requestId);
+    message =
+      "⚠️ *" +
+      escNotify(title) +
+      "* request failed\\. " +
+      (due === null
+        ? "Automatic retries are scheduled\\."
+        : `Next automatic retry: ${dateTime(due, "t")}\\.`);
   }
   if (type === "MEDIA_APPROVED" || type === "MEDIA_AUTO_APPROVED")
-    message = await approvalMessage(title, request);
+    message = await approvalMessage(title, request, releaseDate);
   try {
-    await sendNotification(bot, userId, requestId, type, message);
+    await sendNotification(bot, userId, requestId, type, message, target);
   } catch (error) {
     log.warn({ requestId, type, err: error }, "Webhook notification delivery failed");
   }
@@ -156,10 +249,13 @@ export function sendAutoApproveNotification(
 ): void {
   (async () => {
     let title: string;
+    let releaseDate: string | undefined;
+    const target = { type: mediaType, tmdbId };
     try {
       if (mediaType === "movie") {
         const details = await seerr.getMovieDetails(tmdbId);
         title = details.title ?? `TMDB#${tmdbId}`;
+        releaseDate = details.releaseDate;
       } else {
         const details = await seerr.getTvDetails(tmdbId);
         title = details.name ?? `TMDB#${tmdbId}`;
@@ -171,11 +267,16 @@ export function sendAutoApproveNotification(
     // Enrichment must not suppress a confirmation after successful request creation.
     const request = requestId ? await seerr.getRequest(requestId).catch(() => null) : null;
     const message = request
-      ? await approvalMessage(title, request)
+      ? await approvalMessage(title, request, releaseDate)
       : "⚙️ *" + escNotify(title) + "* has been approved and queued for processing\\!";
+    const keyboard = titleKeyboard(target, false);
     if (requestId)
-      await sendNotification(bot, telegramUserId, requestId, "MEDIA_APPROVED", message);
-    else await bot.api.sendMessage(telegramUserId, message, { parse_mode: "MarkdownV2" });
+      await sendNotification(bot, telegramUserId, requestId, "MEDIA_APPROVED", message, target);
+    else
+      await bot.api.sendMessage(telegramUserId, message, {
+        parse_mode: "MarkdownV2",
+        ...(keyboard ? { reply_markup: keyboard } : {}),
+      });
     log.info({ telegramUser: telegramUserId, mediaType, tmdbId }, "Auto-approve notification sent");
   })().catch((e: unknown) => {
     log.warn(

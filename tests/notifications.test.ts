@@ -14,6 +14,8 @@ Object.assign(process.env, {
   TELESEERR_ADMIN_USER_ID: "1",
   TELESEERR_DATA_DIR: dir,
   TELESEERR_WEBHOOK_SECRET: "test-secret",
+  TELESEERR_MINI_APP_URL: "https://teleseerr.invalid",
+  TELESEERR_MAINTAINERR_URL: "http://maintainerr.invalid",
   LOG_LEVEL: "silent",
   TELESEERR_RADARR_URL: "http://radarr.invalid",
   TELESEERR_RADARR_API_KEY: "dummy",
@@ -180,4 +182,84 @@ test("webhook and local auto-approval share delivery; configured but absent webh
   notifications.sendAutoApproveNotification(bot, 12, "tv", 10, 56);
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setImmediate(resolve));
   assert.equal(messages.length, 2);
+});
+
+test("available notification opens the title, celebrates, shows cleanup in local time and survives a rejected effect", async () => {
+  const [, notifications] = await modules;
+  const { GrammyError } = await import("grammy");
+  const sent: { text: string; options: any }[] = [];
+  let rejectEffect = true;
+  const bot = {
+    api: {
+      sendMessage: async (_user: number, text: string, options: any) => {
+        if (options.message_effect_id && rejectEffect)
+          throw new GrammyError(
+            "rejected",
+            { ok: false, error_code: 400, description: "Bad Request: EFFECT_ID_INVALID" },
+            "sendMessage",
+            {},
+          );
+        sent.push({ text, options });
+      },
+    },
+  } as unknown as Bot;
+  const eligible = Date.now() + 30 * 86400_000;
+  global.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("maintainerr"))
+      return Response.json([
+        {
+          id: 1,
+          type: "movie",
+          isActive: true,
+          arrAction: 0,
+          deleteAfterDays: 30,
+          media: [{ id: 1, tmdbId: 10, addDate: new Date(eligible - 30 * 86400_000).toISOString() }],
+        },
+      ]);
+    if (url.includes("/request/")) return Response.json({ ...request, status: 5 });
+    return Response.json({ title: "Test (movie)" });
+  };
+  const event = (id: string) => ({ notification_type: "MEDIA_AVAILABLE", request: { request_id: id } });
+  await notifications.handleWebhook(event("201"), bot);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0]!.options.message_effect_id, undefined);
+  const button = sent[0]!.options.reply_markup.inline_keyboard[0][0];
+  assert.equal(button.web_app.url, "https://teleseerr.invalid/movie/10");
+  assert.equal(button.style, "success");
+  assert.match(sent[0]!.text, /Test \\\(movie\\\)/);
+  assert(
+    sent[0]!.text.includes(`](tg://time?unix=${Math.floor(eligible / 1000)}&format=D)`),
+    sent[0]!.text,
+  );
+  rejectEffect = false;
+  await notifications.handleWebhook(event("202"), bot);
+  assert.equal(sent[1]!.options.message_effect_id, "5046509860389126442");
+});
+
+test("approval waiting for release shows the release day as a date entity with escaped fallback text", async () => {
+  const [, notifications] = await modules;
+  const sent: { text: string; options: any }[] = [];
+  const bot = {
+    api: {
+      sendMessage: async (_user: number, text: string, options: any) => {
+        sent.push({ text, options });
+      },
+    },
+  } as unknown as Bot;
+  global.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("/request/")) return Response.json(request);
+    if (url.includes("/service/radarr")) return Response.json([]);
+    return Response.json({ title: "Future film", status: "Post Production", releaseDate: "2999-12-25" });
+  };
+  await notifications.handleWebhook(
+    { notification_type: "MEDIA_APPROVED", request: { request_id: "301" } },
+    bot,
+  );
+  const noon = Date.UTC(2999, 11, 25, 12) / 1000;
+  assert.equal(sent.length, 1);
+  assert(sent[0]!.text.includes(`![25 Dec 2999](tg://time?unix=${noon}&format=D)`), sent[0]!.text);
+  assert.equal(sent[0]!.options.reply_markup.inline_keyboard[0][0].style, undefined);
+  assert.equal(notifications.dateTime(Date.UTC(2026, 0, 2, 3, 4), "dt"), "![2 Jan 2026 03:04 UTC](tg://time?unix=1767323040&format=dt)");
 });

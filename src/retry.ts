@@ -60,6 +60,12 @@ export class RetryQueue {
     return true;
   }
 
+  /** When the next automatic attempt runs, for showing it to the requester. */
+  due(id: number): number | null {
+    const job = this.jobs.find((item) => item.id === id);
+    return job && !job.stopped ? job.due : null;
+  }
+
   cancel(id: number): void {
     const job = this.jobs.find((item) => item.id === id);
     if (job) this.save({ ...job, stopped: true, due: null });
