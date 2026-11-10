@@ -33,7 +33,7 @@ const modules = Promise.all([
 ]);
 const request = { status: 2, requestedBy: { id: 7 }, type: "movie", is4k: false, media: { tmdbId: 10 } };
 
-function fakeBot(options: { rejectWidget?: boolean; firstMessageId?: number } = {}) {
+function fakeBot(options: { rejectWidget?: boolean; firstMessageId?: number; rejectDelete?: boolean } = {}) {
   const calls: { method: string; args: any }[] = [];
   let messageId = (options.firstMessageId ?? 501) - 1;
   const record = (method: string) => async (args: any) => {
@@ -47,6 +47,11 @@ function fakeBot(options: { rejectWidget?: boolean; firstMessageId?: number } = 
         sendWidget: record("sendWidget"),
         editMessageWidgetData: record("editMessageWidgetData"),
         answerWidgetQuery: record("answerWidgetQuery"),
+      },
+      deleteMessage: async (chat_id: number, message_id: number) => {
+        calls.push({ method: "deleteMessage", args: { chat_id, message_id } });
+        if (options.rejectDelete) throw new Error("Bad Request: message can't be deleted");
+        return true;
       },
       sendMessage: async (user: number, text: string, extra: any) => {
         calls.push({ method: "sendMessage", args: { user, text, extra } });
@@ -102,33 +107,62 @@ test("widget HTML respects Telegram limits and renders every state without netwo
   runInNewContext(script, { window: {}, document, setInterval: () => 0, JSON });
 });
 
-test("approval sends one widget, later events edit it in place and still notify by DM", async () => {
+const poster = Buffer.from("fake-jpeg-bytes");
+function fakeSeerr(title: string, status: () => number) {
+  global.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("image.tmdb.org")) {
+      assert.match(url, /\/w45\/poster\.jpg$/);
+      return new Response(poster, { headers: { "content-type": "image/jpeg" } });
+    }
+    if (url.includes("/request/")) return Response.json({ ...request, status: status() });
+    if (url.includes("radarr")) return Response.json([]);
+    return Response.json({ title, status: "Released", releaseDate: "2000-01-01", posterPath: "/poster.jpg" });
+  };
+}
+
+test("approval sends one widget with a poster; availability replaces it with a fresh one", async () => {
   const [, notifications, { accountStore }] = await modules;
   accountStore.set({ telegramUserId: 12, seerrUserId: 7, seerrUsername: "test", linkedAt: Date.now() });
   const { bot, of } = fakeBot();
   let status = 2;
-  global.fetch = async (input) => {
-    const url = String(input);
-    if (url.includes("/request/")) return Response.json({ ...request, status });
-    if (url.includes("radarr")) return Response.json([]);
-    return Response.json({ title: "Dune", status: "Released", releaseDate: "2000-01-01" });
-  };
+  fakeSeerr("Dune", () => status);
   await notifications.handleWebhook({ notification_type: "MEDIA_APPROVED", request: { request_id: "71" } }, bot);
   assert.equal(of("sendMessage").length, 0);
   const sent = of("sendWidget")[0]!.args;
   assert.equal(sent.chat_id, 12);
   assert.equal(sent.allow_queries, true);
   assert.match(sent.caption, /Dune/);
+  assert.ok(sent.html.includes(`<img src="data:image/jpeg;base64,${poster.toString("base64")}"`));
+  assert.ok(deflateSync(sent.html, { level: 9 }).length <= 4096);
   assert.equal(sent.reply_markup.inline_keyboard[0][0].web_app.url, "https://teleseerr.invalid/movie/10");
   assert.deepEqual(JSON.parse(sent.chat_data), { r: 1, t: "Dune", s: "approved" });
 
   status = 5;
   await notifications.handleWebhook({ notification_type: "MEDIA_AVAILABLE", request: { request_id: "71" } }, bot);
+  assert.equal(of("sendMessage").length, 0);
+  assert.equal(of("editMessageWidgetData").length, 0);
+  const fresh = of("sendWidget")[1]!.args;
+  assert.match(fresh.caption, /now available/);
+  assert.ok(fresh.message_effect_id);
+  assert.ok(fresh.html.includes("<img"));
+  assert.equal(fresh.reply_markup.inline_keyboard[0][0].style, "success");
+  assert.deepEqual(JSON.parse(fresh.chat_data), { r: 2, t: "Dune", s: "available" });
+  assert.deepEqual(of("deleteMessage")[0]!.args, { chat_id: 12, message_id: 501 });
+});
+
+test("an undeletable old widget is marked available in place", async () => {
+  const [, notifications] = await modules;
+  const { bot, of } = fakeBot({ firstMessageId: 600, rejectDelete: true });
+  let status = 2;
+  fakeSeerr("Alien", () => status);
+  await notifications.handleWebhook({ notification_type: "MEDIA_APPROVED", request: { request_id: "73" } }, bot);
+  status = 5;
+  await notifications.handleWebhook({ notification_type: "MEDIA_AVAILABLE", request: { request_id: "73" } }, bot);
+  assert.equal(of("sendWidget").length, 2);
   const edit = of("editMessageWidgetData")[0]!.args;
-  assert.deepEqual([edit.chat_id, edit.message_id], [12, 501]);
-  assert.deepEqual(JSON.parse(edit.chat_data), { r: 2, t: "Dune", s: "available" });
-  assert.equal(of("sendMessage").length, 1);
-  assert.equal(of("sendWidget").length, 1);
+  assert.equal(edit.message_id, 600);
+  assert.equal(JSON.parse(edit.chat_data).s, "available");
 });
 
 test("a rejected widget falls back to the plain approval message", async () => {

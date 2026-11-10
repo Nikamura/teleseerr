@@ -42,7 +42,7 @@ index.ts          Bot entry point (/start, error handling, graceful shutdown)
 
 **Notifications** — Seerr posts webhooks to `POST /webhook/<SECRET>`. Handler in `notifications.ts` maps Seerr username → Telegram user via the link store, then sends a DM.
 
-**Live request widget** — Opt-in via `TELESEERR_LIVE_WIDGET=true`. `widget.ts` sends one Bot API 10.4 widget DM per approved request and edits its `chat_data` in place (approved → downloading → available); widget taps arrive as `widget_query` updates. grammY 1.46 only types Bot API 10.3, so these calls go through `bot.api.raw` with local types. Any failure falls back to the plain DM.
+**Live request widget** — Opt-in via `TELESEERR_LIVE_WIDGET=true`. `widget.ts` sends one Bot API 10.4 widget DM per approved request and edits its `chat_data` in place (approved → downloading); on "available" it sends a fresh widget (so the user gets a push) and deletes the old one. The HTML embeds TMDB's 45px poster as a `data:` image when it fits the 4 KB compressed limit. Widget taps arrive as `widget_query` updates. grammY 1.46 only types Bot API 10.3, so these calls go through `bot.api.raw` with local types. Any failure falls back to the plain DM.
 
 ### Frontend (web/)
 

@@ -10,6 +10,7 @@ import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
 import * as seerr from "./seerr/client.js";
 import {
+  replaceRequestWidget,
   sendRequestWidget,
   updateRequestWidget,
   widgetEnabled,
@@ -69,7 +70,7 @@ export function startRetries(bot: Bot): void {
 // client, so a rejected effect is resent without it rather than losing the notification.
 const AVAILABLE_EFFECT_ID = "5046509860389126442";
 
-type Target = { type: string; tmdbId: number };
+type Target = { type: string; tmdbId: number; posterPath?: string };
 
 function titleKeyboard(target: Target | undefined, highlight: boolean): InlineKeyboard | undefined {
   if (!config.MINI_APP_URL || !target || (target.type !== "movie" && target.type !== "tv"))
@@ -99,11 +100,27 @@ async function sendNotification(
     ...(keyboard ? { reply_markup: keyboard } : {}),
   };
   await delivery.send(`${requestId}:${event}:${userId}`, async () => {
+    if (available && widgetEnabled()) {
+      try {
+        const effect = { effectId: AVAILABLE_EFFECT_ID, ...(keyboard ? { keyboard } : {}) };
+        if (await replaceRequestWidget(bot, requestId, message, effect)) return;
+      } catch (error) {
+        log.warn({ requestId, err: error }, "Live widget not replaced; using a plain notification");
+      }
+    }
+    // Without a replacement, the existing widget (if any) is marked available in place.
+    if (available) await updateRequestWidget(bot, requestId, "available");
     if (widget && widgetEnabled() && (target?.type === "movie" || target?.type === "tv")) {
       try {
         await sendRequestWidget(
           bot,
-          { requestId, userId, type: target.type, tmdbId: target.tmdbId },
+          {
+            requestId,
+            userId,
+            type: target.type,
+            tmdbId: target.tmdbId,
+            ...(target.posterPath ? { posterPath: target.posterPath } : {}),
+          },
           widget.title,
           widget.status,
           message,
@@ -227,7 +244,7 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
   // Titles come from the authenticated Seerr API, never webhook-controlled text.
   let title = "Request #" + String(requestId);
   let releaseDate: string | undefined;
-  const target = request.media?.tmdbId
+  const target: Target | undefined = request.media?.tmdbId
     ? { type: request.type, tmdbId: request.media.tmdbId }
     : undefined;
   if (request.media?.tmdbId) {
@@ -238,6 +255,7 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
           : await seerr.getTvDetails(request.media.tmdbId);
       title = ("title" in details ? details.title : details.name) ?? title;
       releaseDate = details.releaseDate;
+      if (target && details.posterPath) target.posterPath = details.posterPath;
     } catch {
       /* Safe request-ID fallback; never fall back to webhook subject. */
     }
@@ -260,8 +278,8 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
   const approved = type === "MEDIA_APPROVED" || type === "MEDIA_AUTO_APPROVED";
   if (approved) message = await approvalMessage(title, request, releaseDate);
   // Edits are silent, so the DM below stays the notification; the widget only mirrors state.
-  if (type === "MEDIA_AVAILABLE") await updateRequestWidget(bot, requestId, "available");
-  else if (type === "MEDIA_DECLINED") await updateRequestWidget(bot, requestId, "declined");
+  // "Available" replaces the widget with a fresh one instead (see sendNotification).
+  if (type === "MEDIA_DECLINED") await updateRequestWidget(bot, requestId, "declined");
   else if (type === "MEDIA_FAILED")
     await updateRequestWidget(
       bot,
@@ -298,15 +316,17 @@ export function sendAutoApproveNotification(
   (async () => {
     let title: string;
     let releaseDate: string | undefined;
-    const target = { type: mediaType, tmdbId };
+    const target: Target = { type: mediaType, tmdbId };
     try {
       if (mediaType === "movie") {
         const details = await seerr.getMovieDetails(tmdbId);
         title = details.title ?? `TMDB#${tmdbId}`;
         releaseDate = details.releaseDate;
+        if (details.posterPath) target.posterPath = details.posterPath;
       } else {
         const details = await seerr.getTvDetails(tmdbId);
         title = details.name ?? `TMDB#${tmdbId}`;
+        if (details.posterPath) target.posterPath = details.posterPath;
       }
     } catch {
       title = `TMDB#${tmdbId}`;

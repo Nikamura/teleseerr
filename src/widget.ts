@@ -3,7 +3,14 @@
 // with local types, and widget_query updates are read from the untyped update object.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Bot, Context, InlineKeyboard, NextFunction } from "grammy";
+import { deflateSync } from "node:zlib";
+import {
+  GrammyError,
+  type Bot,
+  type Context,
+  type InlineKeyboard,
+  type NextFunction,
+} from "grammy";
 import { config } from "./config.js";
 import { log } from "./logger.js";
 import { getMovieProgress, getTvProgress } from "./arr/client.js";
@@ -33,8 +40,12 @@ type Entry = {
   messageId: number;
   type: "movie" | "tv";
   tmdbId: number;
+  /** TMDB poster path, kept so a replacement widget can show the same poster. */
+  posterPath?: string;
   state: WidgetState;
 };
+
+type Target = Omit<Entry, "messageId" | "state">;
 
 type WidgetApi = {
   sendWidget(args: {
@@ -44,6 +55,7 @@ type WidgetApi = {
     caption: string;
     parse_mode?: "MarkdownV2";
     allow_queries: boolean;
+    message_effect_id?: string;
     reply_markup?: InlineKeyboard;
   }): Promise<{ message_id: number }>;
   editMessageWidgetData(args: {
@@ -56,9 +68,13 @@ type WidgetApi = {
 const widgetApi = (bot: Pick<Bot, "api">): WidgetApi => bot.api.raw as unknown as WidgetApi;
 
 // Fixed at send time; only chat_data changes. No network, no external resources, no form
-// controls. Limits: 32768 bytes, 4096 bytes after zlib level 9 (checked by tests).
-export const WIDGET_HTML = `<style>
+// controls. Limits: 32768 bytes, 4096 bytes after zlib level 9 (checked by tests and at send).
+// The optional poster is a tiny data: image, the only image source widgets allow.
+export const widgetHtml = (poster?: string): string => `<style>
 body{margin:0;padding:12px 14px;font:14px/1.35 system-ui,sans-serif;color:var(--tg-theme-text-color)}
+.h{display:flex;gap:10px;align-items:center}
+.h img{width:45px;height:68px;flex:none;border-radius:4px;object-fit:cover}
+.h div{min-width:0}
 h3{margin:0 0 2px;font-size:16px;overflow-wrap:anywhere}
 #s{font-weight:600}
 #m{color:var(--tg-theme-hint-color);font-size:12px;min-height:16px}
@@ -66,7 +82,7 @@ h3{margin:0 0 2px;font-size:16px;overflow-wrap:anywhere}
 #b{height:100%;width:0;border-radius:3px;background:var(--tg-theme-button-color,#39f);transition:width .4s}
 button{margin-top:8px;width:100%}
 </style>
-<h3 id="t">Request</h3><div id="s"></div><div class="t"><div id="b"></div></div><div id="m"></div><button id="r">Refresh</button>
+<div class="h">${poster ? `<img src="${poster}" alt="">` : ""}<div><h3 id="t">Request</h3><div id="s"></div></div></div><div class="t"><div id="b"></div></div><div id="m"></div><button id="r">Refresh</button>
 <script>
 var W=window.TelegramWidget,rev=-1,busy=0;
 var L={approved:"Approved · queued",waiting:"Approved · waiting for release",downloading:"Downloading",importing:"Preparing for playback",available:"Ready to watch",declined:"Declined",failed:"Failed"};
@@ -84,6 +100,26 @@ if(W){$("r").addEventListener("click",ask);W.onEvent("chatDataChanged",draw);dra
 setInterval(function(){var d=read();if(d&&!over(d.s)&&d.s!="failed"&&W.isActive&&!W.isForward)ask()},20000);
 W.ready()}
 </script>`;
+export const WIDGET_HTML = widgetHtml();
+
+const fitsLimits = (html: string): boolean =>
+  Buffer.byteLength(html) <= 32768 && deflateSync(html, { level: 9 }).length <= 4096;
+
+/** TMDB's smallest poster (45×68, ~2 KB) as a data: URI, or undefined when unavailable. */
+export async function fetchPoster(posterPath: string | undefined): Promise<string | undefined> {
+  if (!posterPath || !/^\/[\w-]+\.(?:jpe?g|png|webp)$/i.test(posterPath)) return undefined;
+  try {
+    const response = await fetch(`${config.TMDB_IMAGE_BASE}/w45${posterPath}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const type = response.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
+    if (!response.ok || !/^image\/(?:jpeg|png|webp)$/.test(type)) return undefined;
+    const bytes = Buffer.from(await response.arrayBuffer());
+    return bytes.length <= 3072 ? `data:${type};base64,${bytes.toString("base64")}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // ── Store ─────────────────────────────────────────
 
@@ -136,27 +172,82 @@ export function widgetEnabled(): boolean {
   return config.LIVE_WIDGET;
 }
 
+type SendOptions = { keyboard?: InlineKeyboard; effectId?: string };
+
+async function post(
+  bot: Pick<Bot, "api">,
+  target: Target,
+  state: WidgetState,
+  caption: string,
+  options: SendOptions,
+): Promise<number> {
+  const poster = await fetchPoster(target.posterPath);
+  const withPoster = widgetHtml(poster);
+  const args = {
+    chat_id: target.userId,
+    html: poster && fitsLimits(withPoster) ? withPoster : WIDGET_HTML,
+    chat_data: encodeState(state),
+    // Shown in notifications, the chat list and on clients without widget support.
+    caption,
+    parse_mode: "MarkdownV2" as const,
+    allow_queries: true,
+    ...(options.keyboard ? { reply_markup: options.keyboard } : {}),
+  };
+  if (!options.effectId) return (await widgetApi(bot).sendWidget(args)).message_id;
+  try {
+    return (await widgetApi(bot).sendWidget({ ...args, message_effect_id: options.effectId }))
+      .message_id;
+  } catch (error) {
+    // An unknown effect is rejected; the message matters more than the effect.
+    if (!(error instanceof GrammyError) || error.error_code !== 400) throw error;
+    return (await widgetApi(bot).sendWidget(args)).message_id;
+  }
+}
+
 /** Sends the widget message. Throws on failure so the caller can fall back to a plain DM. */
 export async function sendRequestWidget(
   bot: Pick<Bot, "api">,
-  target: { requestId: number; userId: number; type: "movie" | "tv"; tmdbId: number },
+  target: Target,
   title: string,
   status: WidgetStatus,
   caption: string,
   keyboard?: InlineKeyboard,
 ): Promise<void> {
   const state: WidgetState = { r: 1, t: title, s: status };
-  const sent = await widgetApi(bot).sendWidget({
-    chat_id: target.userId,
-    html: WIDGET_HTML,
-    chat_data: encodeState(state),
-    // Shown in notifications, the chat list and on clients without widget support.
-    caption,
-    parse_mode: "MarkdownV2",
-    allow_queries: true,
-    ...(keyboard ? { reply_markup: keyboard } : {}),
-  });
-  save({ ...target, messageId: sent.message_id, state });
+  const messageId = await post(bot, target, state, caption, keyboard ? { keyboard } : {});
+  save({ ...target, messageId, state });
+}
+
+/**
+ * Edits are silent, so "available" replaces the widget instead: a fresh message notifies, then the
+ * old one is deleted. Bots can only delete their messages for 48 hours; an older widget is marked
+ * available in place and stays. Returns false without a widget; throws if the send fails.
+ */
+export async function replaceRequestWidget(
+  bot: Pick<Bot, "api">,
+  requestId: number,
+  caption: string,
+  options: SendOptions,
+): Promise<boolean> {
+  const entry = entries.find((item) => item.requestId === requestId);
+  if (!entry) return false;
+  const state: WidgetState = { r: entry.state.r + 1, t: entry.state.t, s: "available" };
+  const messageId = await post(bot, entry, state, caption, options);
+  save({ ...entry, messageId, state });
+  try {
+    await bot.api.deleteMessage(entry.userId, entry.messageId);
+  } catch (error) {
+    log.debug({ requestId, err: error }, "Old live widget not deleted; marking it available");
+    // Not apply(): the store now tracks the new message.
+    await widgetApi(bot)
+      .editMessageWidgetData({
+        chat_id: entry.userId,
+        message_id: entry.messageId,
+        chat_data: encodeState(state),
+      })
+      .catch((err: unknown) => log.warn({ requestId, err }, "Live widget update failed"));
+  }
+  return true;
 }
 
 async function apply(
