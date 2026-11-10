@@ -64,6 +64,8 @@ export const config = {
   MINI_APP_PORT: optionalInt("TELESEERR_MINI_APP_PORT", 3000),
   MINI_APP_URL: optional("TELESEERR_MINI_APP_URL", ""),
   AUTO_RETRY_FAILED: optional("TELESEERR_AUTO_RETRY_FAILED", "false") === "true",
+  // Bot API 10.4 live request widget instead of the plain approval DM (falls back on failure).
+  LIVE_WIDGET: optional("TELESEERR_LIVE_WIDGET", "false") === "true",
   RETRY_DELAYS_SECONDS: retryDelays(),
   ANIME_SONARR_ID: optional("TELESEERR_ANIME_SONARR_ID", ""),
 

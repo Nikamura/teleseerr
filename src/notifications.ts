@@ -9,6 +9,13 @@ import { GrammyError, InlineKeyboard, type Bot } from "grammy";
 import { log } from "./logger.js";
 import { accountStore } from "./stores.js";
 import * as seerr from "./seerr/client.js";
+import {
+  sendRequestWidget,
+  updateRequestWidget,
+  widgetEnabled,
+  widgetStatus,
+  type WidgetStatus,
+} from "./widget.js";
 
 // ── Seerr Webhook Payload ─────────────────────────
 
@@ -82,6 +89,7 @@ async function sendNotification(
   type: string,
   message: string,
   target?: Target,
+  widget?: { title: string; status: WidgetStatus },
 ): Promise<void> {
   const event = type === "MEDIA_AUTO_APPROVED" ? "MEDIA_APPROVED" : type;
   const available = event === "MEDIA_AVAILABLE";
@@ -91,6 +99,21 @@ async function sendNotification(
     ...(keyboard ? { reply_markup: keyboard } : {}),
   };
   await delivery.send(`${requestId}:${event}:${userId}`, async () => {
+    if (widget && widgetEnabled() && (target?.type === "movie" || target?.type === "tv")) {
+      try {
+        await sendRequestWidget(
+          bot,
+          { requestId, userId, type: target.type, tmdbId: target.tmdbId },
+          widget.title,
+          widget.status,
+          message,
+          keyboard,
+        );
+        return;
+      } catch (error) {
+        log.warn({ requestId, err: error }, "Live widget not sent; using a plain notification");
+      }
+    }
     if (!available) {
       await bot.api.sendMessage(userId, message, options);
       return;
@@ -130,8 +153,7 @@ async function approvalMessage(
   request: seerr.RequestDetails,
   releaseDate?: string,
 ): Promise<string> {
-  if (!(await waitingForRelease(request)))
-    return "⚙️ *" + escNotify(title) + "* has been approved and queued for processing\\!";
+  if (!(await waitingForRelease(request))) return queuedMessage(title);
   const release = Date.parse(releaseDate ?? "");
   // A release date is a calendar day, not an instant: noon UTC keeps the same day in most zones.
   const day = Math.floor(release / 86400_000) * 86400_000 + 43200_000;
@@ -142,6 +164,12 @@ async function approvalMessage(
     (Number.isFinite(release) && day > Date.now() ? ` Release date: ${dateTime(day, "D")}\\.` : "")
   );
 }
+
+const queuedMessage = (title: string): string =>
+  "⚙️ *" + escNotify(title) + "* has been approved and queued for processing\\!";
+// The approval text already says which of the two approved states applies.
+const approvalStatus = (message: string): WidgetStatus =>
+  message.startsWith("🕒") ? "waiting" : "approved";
 
 async function cleanupNote(type: string, tmdbId: number): Promise<string> {
   const { items } = await cleanupStatus(type, tmdbId);
@@ -229,10 +257,30 @@ export async function handleWebhook(payload: unknown, bot: Bot): Promise<void> {
         ? "Automatic retries are scheduled\\."
         : `Next automatic retry: ${dateTime(due, "t")}\\.`);
   }
-  if (type === "MEDIA_APPROVED" || type === "MEDIA_AUTO_APPROVED")
-    message = await approvalMessage(title, request, releaseDate);
+  const approved = type === "MEDIA_APPROVED" || type === "MEDIA_AUTO_APPROVED";
+  if (approved) message = await approvalMessage(title, request, releaseDate);
+  // Edits are silent, so the DM below stays the notification; the widget only mirrors state.
+  if (type === "MEDIA_AVAILABLE") await updateRequestWidget(bot, requestId, "available");
+  else if (type === "MEDIA_DECLINED") await updateRequestWidget(bot, requestId, "declined");
+  else if (type === "MEDIA_FAILED")
+    await updateRequestWidget(
+      bot,
+      requestId,
+      "failed",
+      retryQueue?.due(requestId) != null ? "Retrying automatically" : undefined,
+    );
+  else if (approved && widgetStatus(requestId) === "failed")
+    await updateRequestWidget(bot, requestId, approvalStatus(message));
   try {
-    await sendNotification(bot, userId, requestId, type, message, target);
+    await sendNotification(
+      bot,
+      userId,
+      requestId,
+      type,
+      message,
+      target,
+      approved ? { title, status: approvalStatus(message) } : undefined,
+    );
   } catch (error) {
     log.warn({ requestId, type, err: error }, "Webhook notification delivery failed");
   }
@@ -268,10 +316,13 @@ export function sendAutoApproveNotification(
     const request = requestId ? await seerr.getRequest(requestId).catch(() => null) : null;
     const message = request
       ? await approvalMessage(title, request, releaseDate)
-      : "⚙️ *" + escNotify(title) + "* has been approved and queued for processing\\!";
+      : queuedMessage(title);
     const keyboard = titleKeyboard(target, false);
     if (requestId)
-      await sendNotification(bot, telegramUserId, requestId, "MEDIA_APPROVED", message, target);
+      await sendNotification(bot, telegramUserId, requestId, "MEDIA_APPROVED", message, target, {
+        title,
+        status: approvalStatus(message),
+      });
     else
       await bot.api.sendMessage(telegramUserId, message, {
         parse_mode: "MarkdownV2",

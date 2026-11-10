@@ -9,6 +9,7 @@ import { startRetries } from "./notifications.js";
 import { startServer } from "./server.js";
 import { addPendingAndNotify } from "./pending.js";
 import { accountStore } from "./stores.js";
+import { widgetEnabled, widgetQueries } from "./widget.js";
 
 const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
 
@@ -24,6 +25,9 @@ bot.use(async (ctx, next) => {
 
   return next();
 });
+
+// Widget taps arrive as widget_query updates, which grammY 1.46 (Bot API 10.3) does not type.
+if (widgetEnabled()) bot.use(widgetQueries(bot));
 
 // ── Commands ──────────────────────────────────────
 
