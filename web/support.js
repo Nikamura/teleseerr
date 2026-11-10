@@ -1,5 +1,6 @@
 import { findAlternatives } from "./downloads.js";
 import { api, apiPost, escHtml, toast, getUserState } from "./state.js";
+import { confirmAction, haptic, closingConfirmation } from "./native.js";
 
 const reasons = {
   download: "Not downloading",
@@ -18,7 +19,7 @@ function sheet(title) {
   dialog.setAttribute("aria-labelledby","support-title");
   dialog.innerHTML = `<header><div><p class="section-kicker">Here to help</p><h2 id="support-title">${escHtml(title)}</h2></div><button class="quick-btn secondary" aria-label="Close">✕</button></header><div class="support-content"></div>`;
   dialog.querySelector("header button").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("close", () => { closingConfirmation(false); dialog.remove(); });
   document.body.append(dialog);
   dialog.showModal();
   return { dialog, content: /** @type {HTMLElement} */ (dialog.querySelector(".support-content")) };
@@ -126,13 +127,14 @@ export async function openSupport(target) {
         const b = /** @type {HTMLButtonElement} */ (el);
         const action = b.dataset.action;
         if (
-          !confirm(
+          !(await confirmAction(
             action === "refresh-library"
               ? "Refresh the download library’s file status for this title only? This does not start downloads. Plex and Seerr may take another scan to catch up."
               : action === "priority"
                 ? "Move this shared transfer to the top of the torrent queue? This affects everyone downloading its episodes. Other transfers will not be paused. You can do this once per transfer every 30 minutes."
                 : "Retry automatic import for this completed transfer? The service will retain its normal matching and quality rules.",
-          )
+            { ok: action === "refresh-library" ? "Refresh" : action === "priority" ? "Move to top" : "Retry import" },
+          ))
         )
           return;
         b.disabled = true;
@@ -144,15 +146,23 @@ export async function openSupport(target) {
             instance: b.dataset.instance,
             confirmed: true,
           });
+          haptic(r.error ? "error" : "success");
           toast(r.error || r.message);
         } catch {
+          haptic("error");
           toast("Could not confirm the action. Refresh before retrying.");
         } finally {
           b.disabled = false;
         }
       }),
     );
-    /** @type {HTMLFormElement} */ (content.querySelector("form")).onsubmit = async (e) => {
+    const problemForm = /** @type {HTMLFormElement} */ (content.querySelector("#problem-form"));
+    // Closing the Mini App would silently discard a typed report.
+    problemForm.addEventListener("input", () => {
+      const draft = new FormData(problemForm);
+      closingConfirmation(!!(String(draft.get("notes") ?? "").trim() || String(draft.get("device") ?? "").trim()));
+    });
+    problemForm.onsubmit = async (e) => {
       e.preventDefault();
       const form = /** @type {HTMLFormElement} */ (e.currentTarget);
       const button = /** @type {HTMLButtonElement} */ (form.querySelector('button[type="submit"]'));
@@ -161,9 +171,12 @@ export async function openSupport(target) {
         const fields = Object.fromEntries(new FormData(form));
         const r = await apiPost("/api/support/reports", { ...target, ...fields });
         if (r.error) throw new Error(r.error);
+        closingConfirmation(false);
+        haptic("success");
         content.querySelector("#report-result").textContent =
           "Report saved and queued for the admin on Telegram. Track it in Requests → Problems.";
       } catch (e) {
+        haptic("error");
         content.querySelector("#report-result").textContent = e.message;
       } finally {
         button.disabled = false;
@@ -270,9 +283,10 @@ export async function editPendingRequest(item) {
         return;
       }
       if (
-        !confirm(
+        !(await confirmAction(
           `Update this pending request to ${seasons.length} seasons: ${seasons.map((s) => `S${s}`).join(", ")}?`,
-        )
+          { ok: "Update" },
+        ))
       )
         return;
       const b = /** @type {HTMLButtonElement} */ (form.querySelector("button"));

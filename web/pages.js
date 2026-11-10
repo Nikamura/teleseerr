@@ -10,6 +10,7 @@ import {
 } from "./state.js";
 import { addLoadMore, removeLoadMore } from "./grid.js";
 import { openDetail, removeRequestBar } from "./detail.js";
+import { confirmAction, haptic, ensureWriteAccess, canAddToHomeScreen, addToHomeScreen } from "./native.js";
 
 // ── My Requests ─────────────────────────────
 
@@ -101,9 +102,9 @@ export function renderRequestList(items, container, append = false) {
       controls.querySelectorAll("button").forEach(button => button.addEventListener("click", async () => {
         const action = button.dataset.change;
         if (action === "edit") { void editPendingRequest(item); return; }
-        if (!confirm(action === "cancel" ? "Cancel your pending request? Shared approved downloads will not be removed." : "Retry submitting this failed request to the download service?")) return;
+        if (!(await confirmAction(action === "cancel" ? "Cancel your pending request? Shared approved downloads will not be removed." : "Retry submitting this failed request to the download service?", action === "cancel" ? { ok: "Cancel request", destructive: true } : { ok: "Retry" }))) return;
         button.disabled=true;
-        try { const r=await apiPost("/api/requests/change",{id:item.id,action,confirmed:true});toast(r.error||r.message);if(!r.error)void loadRequests(document.getElementById("requests-view")); } catch {toast("Request change could not be confirmed. Refresh first.");} finally {button.disabled=false;}
+        try { const r=await apiPost("/api/requests/change",{id:item.id,action,confirmed:true});haptic(r.error?"error":"success");toast(r.error||r.message);if(!r.error)void loadRequests(document.getElementById("requests-view")); } catch {haptic("error");toast("Request change could not be confirmed. Refresh first.");} finally {button.disabled=false;}
       }));
       el.querySelector(".request-info").append(controls);
     }
@@ -153,7 +154,16 @@ export async function showProfile(routed = false) {
         <div class="spinner" style="width:20px;height:20px;margin:16px auto"></div>
       </div>
       ${!isTelegramWebApp ? '<button class="logout-btn" id="logout-btn">Log out</button>' : ""}
+      <button class="quick-btn secondary" id="home-screen-btn" hidden>Add to Home Screen</button>
     </div>`;
+
+  // Only offered where Telegram reports a shortcut can be added and is not there yet.
+  void canAddToHomeScreen().then((possible) => {
+    const button = document.getElementById("home-screen-btn");
+    if (!possible || !button) return;
+    button.hidden = false;
+    button.onclick = () => { addToHomeScreen(); button.hidden = true; };
+  });
 
   if (!isTelegramWebApp) {
     document.getElementById("logout-btn").onclick = () => {
@@ -230,6 +240,8 @@ export function showUnlinked() {
         <div class="unlinked-id-value">${userState.telegramUserId}</div>
       </div>
     </div>`;
+  // The link confirmation arrives as a DM, which needs permission if Start was never pressed.
+  ensureWriteAccess();
 }
 
 // ── Telegram Login (browser) ─────────────────

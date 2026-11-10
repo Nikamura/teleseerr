@@ -1,5 +1,6 @@
 import { navigate, routerReady, tabPath } from "./router.js";
 import { api, escHtml, getActiveFilters, getActiveGenre, getGenresCache, getCurrentTab, getSearchTimeout, setSearchTimeout } from "./state.js";
+import { dismissKeyboard } from "./native.js";
 import { addRailControls, renderGrid, renderSkeletons, renderSliderCard, renderSliderSkeletons, addLoadMore, removeLoadMore } from "./grid.js";
 
 // ── Discover Page (Trending tab) ────────────
@@ -346,6 +347,11 @@ export function initSearch() {
     document.getElementById("search-view").classList.add("active");
 
     setSearchTimeout(setTimeout(() => routerReady() ? navigate("/search", {replace:location.pathname === "/search",query:q}) : doSearch(q), 350));
+  });
+
+  // Results already load while typing; submitting only needs the keyboard out of the way.
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) dismissKeyboard(searchInput);
   });
 }
 

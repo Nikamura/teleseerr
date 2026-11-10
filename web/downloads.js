@@ -1,5 +1,6 @@
 import { openSupport } from "./support.js";
 import { api, apiPost, escHtml } from "./state.js";
+import { confirmAction, haptic } from "./native.js";
 
 const episodeLabels = {
   available: "Available", missing: "Missing", unaired: "Not aired yet", unknown: "Air date unknown",
@@ -99,7 +100,7 @@ export function mountDownloads(type, id, options = {}) {
           action.onclick = async () => {
             const season = Number(action.dataset.recoverSeason);
             const episodeId = action.dataset.recoverEpisode ? Number(action.dataset.recoverEpisode) : undefined;
-            if (!confirm(episodeId ? `Download ${action.dataset.episodeLabel}? This restores monitoring and searches for this episode only. Normal automatic cleanup still applies.` : `Resume downloads for ${action.dataset.count} missing aired episodes in ${season === 0 ? "Specials" : `Season ${season}`}? This restores monitoring and starts a search. Downloads are shared with everyone. Normal automatic cleanup still applies.`)) return;
+            if (!(await confirmAction(episodeId ? `Download ${action.dataset.episodeLabel}? This restores monitoring and searches for this episode only. Normal automatic cleanup still applies.` : `Resume downloads for ${action.dataset.count} missing aired episodes in ${season === 0 ? "Specials" : `Season ${season}`}? This restores monitoring and starts a search. Downloads are shared with everyone. Normal automatic cleanup still applies.`, { ok: episodeId ? "Download" : "Resume downloads" }))) return;
             clearTimeout(timer);
             action.disabled = true;
             const output = action.parentElement.querySelector(".recovery-result");
@@ -165,14 +166,15 @@ export async function findAlternatives(target, button) {
     results.querySelectorAll("[data-release]").forEach(element => {
       const switchButton = /** @type {HTMLButtonElement} */ (element);
       switchButton.onclick = async () => {
-        if (!confirm(data.action === "replace-file" ? `Download a replacement for ${data.pack ? "every episode in this season" : "this file"}? Current files stay while it downloads. The library service may replace them during import. This affects everyone using the shared library.` : data.action === "download" ? "Download this release for the missing episode? It will be available to everyone when ready." : `Replace this download for everyone? Current progress may be lost.${data.pack ? " This is a shared season transfer: all its episodes are affected." : ""}`)) return;
+        if (!(await confirmAction(data.action === "replace-file" ? `Download a replacement for ${data.pack ? "every episode in this season" : "this file"}? Current files stay while it downloads. The library service may replace them during import. This affects everyone using the shared library.` : data.action === "download" ? "Download this release for the missing episode? It will be available to everyone when ready." : `Replace this download for everyone? Current progress may be lost.${data.pack ? " This is a shared season transfer: all its episodes are affected." : ""}`, data.action === "download" ? { ok: "Download" } : { ok: "Replace", destructive: data.action !== "replace-file" }))) return;
         results.querySelectorAll("button").forEach(b => { b.disabled = true; });
         button.disabled = true;
         try {
           const result = await apiPost("/api/downloads/switch", { token: data.token, index: Number(switchButton.dataset.release), confirmed: true });
           if (result.error) throw new Error(result.error);
+          haptic(result.warning ? "warning" : "success");
           results.textContent = result.warning || result.message || "New release accepted. Refresh shortly to see its progress.";
-        } catch (error) { results.textContent = error.message || "Could not confirm replacement. Check downloads before retrying."; }
+        } catch (error) { haptic("error"); results.textContent = error.message || "Could not confirm replacement. Check downloads before retrying."; }
         finally { button.disabled = false; }
       };
     });

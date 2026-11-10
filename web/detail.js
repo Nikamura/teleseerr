@@ -13,6 +13,7 @@ import {
   clearProgressPolling, setProgressInterval,
 } from "./state.js";
 import { renderSliderCard, renderGrid } from "./grid.js";
+import { confirmAction, haptic, ensureWriteAccess } from "./native.js";
 
 // ── Download Progress ────────────────────────
 
@@ -118,6 +119,7 @@ export async function openDetail(type, id, routed = false) {
     setSelectedSeasons(new Set());
     renderDetail(type, data);
   } catch {
+    haptic("error");
     toast("Failed to load details");
   } finally {
     hideLoading();
@@ -271,6 +273,8 @@ export function renderDetail(type, d) {
         });
         hideLoading();
         if (result.success) {
+          haptic("success");
+          ensureWriteAccess();
           removeRequestBar();
           if (result.status === 2) {
             toast("Request approved!");
@@ -280,6 +284,7 @@ export function renderDetail(type, d) {
             view.querySelector(".detail-status").innerHTML = "Request submitted";
           }
         } else {
+          haptic("error");
           toast(formatError(result.error));
         }
       }, caps.has4kMovie);
@@ -491,15 +496,17 @@ export function attachSeasonHandlers(show, view) {
     /** @type {HTMLElement} */ (btn).onclick = () => {
       const season = Number(/** @type {HTMLElement} */ (btn).dataset.season);
       if (selected.has(season)) selected.delete(season); else selected.add(season);
+      haptic("selection");
       sync();
     };
   });
   const latest = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-latest"));
-  if (latest) latest.onclick = () => { selected.clear(); const season = Math.max(...selectable); if (Number.isFinite(season)) selected.add(season); sync(); };
+  if (latest) latest.onclick = () => { haptic("selection"); selected.clear(); const season = Math.max(...selectable); if (Number.isFinite(season)) selected.add(season); sync(); };
   const all = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-all"));
-  if (all) all.onclick = () => { selectable.forEach(season => selected.add(season)); sync(); };
+  if (all) all.onclick = () => { haptic("selection"); selectable.forEach(season => selected.add(season)); sync(); };
   const upcoming = /** @type {HTMLButtonElement | null} */ (view.querySelector("#select-new"));
   if (upcoming) upcoming.onclick = () => {
+    haptic("selection");
     const today = new Date().toISOString().slice(0, 10);
     for (const season of show.seasons ?? []) {
       if (selectable.has(season.seasonNumber) && ((season.airDate && season.airDate > today) || (!season.airDate && show.status === "Returning Series"))) selected.add(season.seasonNumber);
@@ -507,7 +514,7 @@ export function attachSeasonHandlers(show, view) {
     sync();
   };
   const clear = /** @type {HTMLButtonElement | null} */ (view.querySelector("#clear-selection"));
-  if (clear) clear.onclick = () => { selected.clear(); sync(); };
+  if (clear) clear.onclick = () => { haptic("selection"); selected.clear(); sync(); };
   sync();
 }
 
@@ -537,7 +544,7 @@ export function updateTvRequestBar(show) {
   const was4k = /** @type {HTMLInputElement | null} */ (document.getElementById("request-4k-cb"))?.checked ?? false;
   showRequestBar(`Request ${selectionLabel}`, async () => {
     const count = (show.seasons ?? []).filter(s => sorted.includes(s.seasonNumber)).reduce((n,s) => n + (s.episodeCount ?? 0),0);
-    if (!confirm(`Request ${sorted.length} season${sorted.length === 1 ? "" : "s"}: ${label} (${count} episodes)? Already available episodes are retained. This is a shared library request.`)) return;
+    if (!(await confirmAction(`Request ${sorted.length} season${sorted.length === 1 ? "" : "s"}: ${label} (${count} episodes)? Already available episodes are retained. This is a shared library request.`, { ok: "Request" }))) return;
     showLoading();
     const result = await apiPost("/api/request", {
       mediaType: "tv",
@@ -547,11 +554,14 @@ export function updateTvRequestBar(show) {
     });
     hideLoading();
     if (result.success) {
+      haptic("success");
+      ensureWriteAccess();
       toast(result.status === 2 ? `${selectionLabel} approved!` : `${selectionLabel} requested!`);
       removeRequestBar();
       selectedSeasons.clear();
       openDetail("tv", show.id);
     } else {
+      haptic("error");
       toast(formatError(result.error));
     }
   }, caps.has4kTv);
@@ -755,6 +765,7 @@ export function showRequestBar(label, handler, show4k = false) {
   bar.id = "request-bar";
   bar.innerHTML = `${show4k ? '<label class="request-bar-4k"><input type="checkbox" id="request-4k-cb"> 4K</label>' : ""}<button>${escHtml(label)}</button>`;
   bar.querySelector("button").onclick = handler;
+  bar.querySelector("input")?.addEventListener("change", () => haptic("selection"));
   document.body.appendChild(bar);
 }
 

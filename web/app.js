@@ -8,6 +8,7 @@ import { loadDiscoverPage, loadGenreView, initSearch, doSearch } from "./discove
 import { openDetail, openPerson, removeRequestBar } from "./detail.js";
 import { loadRequests, initProfileBtn, showUnlinked, showLoginScreen, showProfile } from "./pages.js";
 import { showAdmin } from "./admin.js";
+import { haptic } from "./native.js";
 
 watchForUpdates();
 
@@ -20,7 +21,7 @@ setCardClickHandler((type, id) => openDetail(type, id));
 /** @returns {void} */
 function initTabs() {
   document.querySelectorAll(".tab").forEach((tab) => {
-    /** @type {HTMLElement} */ (tab).onclick = (event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); switchTab(/** @type {HTMLElement} */ (tab).dataset.tab); };
+    /** @type {HTMLElement} */ (tab).onclick = (event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); if (!tab.classList.contains("active")) haptic("selection"); switchTab(/** @type {HTMLElement} */ (tab).dataset.tab); };
   });
 }
 

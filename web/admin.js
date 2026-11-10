@@ -1,6 +1,7 @@
 import { openReports } from "./support.js";
 import { icon } from "./icons.js";
 import { api, apiPost, escHtml, showLoading, hideLoading, toast, getUserState } from "./state.js";
+import { confirmAction, haptic } from "./native.js";
 
 // ── Admin Panel ──────────────────────────────
 
@@ -78,22 +79,22 @@ export async function loadAdminUsers() {
         try {
           const result = await apiPost("/api/admin/download-permission", { telegramUserId: Number(input.dataset.tgId), enabled: input.checked });
           if (result.error) throw new Error(result.error);
-          toast("Download permission updated");
-        } catch { input.checked = !input.checked; toast("Could not update permission"); }
+          haptic("selection"); toast("Download permission updated");
+        } catch { input.checked = !input.checked; haptic("error"); toast("Could not update permission"); }
         finally { input.disabled = false; }
       };
     });
 
     list.querySelectorAll(".admin-unlink-btn").forEach((btn) => {
       /** @type {HTMLElement} */ (btn).onclick = async () => {
-        if (!confirm(`Unlink Telegram user ${/** @type {HTMLElement} */ (btn).dataset.tgId}?`)) return;
+        if (!(await confirmAction(`Unlink Telegram user ${/** @type {HTMLElement} */ (btn).dataset.tgId}?`, { ok: "Unlink", destructive: true }))) return;
         showLoading();
         try {
           const response = await apiPost("/api/admin/unlink", { telegramUserId: Number(/** @type {HTMLElement} */ (btn).dataset.tgId) });
           if (response.error) throw new Error(response.error);
-          toast("Account unlinked");
+          haptic("success"); toast("Account unlinked");
           await loadAdminUsers();
-        } catch { toast("Could not unlink account. Please try again."); }
+        } catch { haptic("error"); toast("Could not unlink account. Please try again."); }
         finally { hideLoading(); }
       };
     });

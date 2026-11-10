@@ -119,6 +119,7 @@ test("season selection survives rerender and cannot include pending/non-selectab
     show,
     view,
     getSelectedSeasons: () => selected,
+    haptic() {},
     updateClearBtn() {},
     updateTvRequestBar() {
       updates++;
